@@ -3,8 +3,8 @@
     "paper-reading-agent@xiaoxuan.li": {
       "updates": [
         {
-          "version": "0.1.5",
-          "update_link": "https://github.com/xiaoxuanli-a/zotero_agent_reader_plugin/releases/download/v0.1.5/paper-reading-agent.xpi",
+          "version": "0.1.6",
+          "update_link": "https://github.com/xiaoxuanli-a/zotero_agent_reader_plugin/releases/download/v0.1.6/paper-reading-agent.xpi",
           "applications": {
             "zotero": {
               "strict_min_version": "9.0",
