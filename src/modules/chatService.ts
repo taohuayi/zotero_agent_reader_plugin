@@ -67,7 +67,7 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
   var backendPrompt = buildBackendPrompt(content, ctx);
   // let the backend read files outside the workdir (the PDF lives in Zotero's
   // storage tree); codex ignores opts.addDir, claude maps it to --add-dir.
-  var runOpts = opts;
+  var runOpts;
   try {
     runOpts = Object.assign({}, opts);
     if (ctx.pdfPath) runOpts.addDir = PathUtils.parent(ctx.pdfPath);

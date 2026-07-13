@@ -79,9 +79,8 @@ function dispatch(msg) {
     var pend = S.pending[msg.id];
     if (pend) {
       delete S.pending[msg.id];
-      msg.error
-        ? pend.reject(new Error(JSON.stringify(msg.error)))
-        : pend.resolve(msg.result);
+      if (msg.error) pend.reject(new Error(JSON.stringify(msg.error)));
+      else pend.resolve(msg.result);
     }
     return;
   }
@@ -295,7 +294,7 @@ async function startServer(opts) {
     command = r.command;
     env = r.env;
   } catch (e) {
-    throw new Error(String(e && e.message ? e.message : e));
+    throw new Error(String(e && e.message ? e.message : e), { cause: e });
   }
 
   var argv = ["app-server"];

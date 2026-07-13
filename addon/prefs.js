@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 // Default prefs. Keys are SHORT here; zotero-plugin-scaffold prefixes them with
 // `extensions.paper-reading-agent.` at build time AND rewrites preference="<key>"
 // in content/preferences.xhtml to the same full key. An empty string means "use

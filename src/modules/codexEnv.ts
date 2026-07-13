@@ -49,7 +49,12 @@ function commonBins(env, pathPref) {
     if (i > 0) extra.push(pathPref.slice(0, i));
   }
   if (env.HOME) extra.push(env.HOME + "/.local/bin");
-  return extra.concat(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]);
+  return extra.concat([
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+  ]);
 }
 
 // Prepend dirs not already present to env.PATH. Mutates + returns env.
@@ -205,7 +210,6 @@ async function runLoginShell(Subprocess, env, binName) {
 //   pathPref      — an explicit absolute path pref (wins if set)
 //   options.injectUser — ensure USER/LOGNAME are present (claude keychain auth)
 export async function resolveBinary(binName, pathPref, opts, options) {
-  opts = opts || {};
   options = options || {};
   var Subprocess = getSubprocess();
   var env = augmentEnvPath(Subprocess.getEnvironment(), pathPref);
@@ -241,6 +245,7 @@ export async function resolveBinary(binName, pathPref, opts, options) {
     throw new Error(
       binName +
         " not found — install it, or set its absolute path in preferences.",
+      { cause: e },
     );
   }
 }

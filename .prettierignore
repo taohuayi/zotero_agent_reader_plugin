@@ -5,3 +5,7 @@ node_modules
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Preserve upstream/minified assets and verbatim third-party license text.
+addon/content/vendor/**
+THIRD_PARTY_NOTICES.md

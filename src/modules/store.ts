@@ -12,7 +12,11 @@
  */
 
 function convDir() {
-  return PathUtils.join(Zotero.DataDirectory.dir, "paper-reading-agent", "conversations");
+  return PathUtils.join(
+    Zotero.DataDirectory.dir,
+    "paper-reading-agent",
+    "conversations",
+  );
 }
 function convPath(key) {
   return PathUtils.join(convDir(), key + ".json");
@@ -59,7 +63,10 @@ export function setSessionHandle(conv, backend, id) {
 
 export async function save(conv) {
   try {
-    await IOUtils.makeDirectory(convDir(), { ignoreExisting: true, createAncestors: true });
+    await IOUtils.makeDirectory(convDir(), {
+      ignoreExisting: true,
+      createAncestors: true,
+    });
     await IOUtils.writeUTF8(convPath(conv.item_key), JSON.stringify(conv));
   } catch (e) {
     Zotero.debug("[PaperReadingAgent] store.save failed: " + e);

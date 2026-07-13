@@ -20,13 +20,32 @@ export function buildArgv(workdir, sessionId, prompt, opts) {
   var argv;
   if (sessionId == null) {
     // First turn: bind cwd + sandbox here (resume can't set them).
-    argv = ["exec", prompt, "-C", workdir, "--sandbox", sandbox,
-            "-c", "approval_policy=never", "--skip-git-repo-check", "--json"];
+    argv = [
+      "exec",
+      prompt,
+      "-C",
+      workdir,
+      "--sandbox",
+      sandbox,
+      "-c",
+      "approval_policy=never",
+      "--skip-git-repo-check",
+      "--json",
+    ];
   } else {
     // Resume: cwd inherited; sandbox/approval re-asserted via -c.
-    argv = ["exec", "resume", sessionId, prompt,
-            "-c", "sandbox_mode=" + sandbox, "-c", "approval_policy=never",
-            "--skip-git-repo-check", "--json"];
+    argv = [
+      "exec",
+      "resume",
+      sessionId,
+      prompt,
+      "-c",
+      "sandbox_mode=" + sandbox,
+      "-c",
+      "approval_policy=never",
+      "--skip-git-repo-check",
+      "--json",
+    ];
   }
   if (opts.webSearch !== false) argv.push("-c", "tools.web_search=true");
   if (opts.model) argv.push("-m", opts.model);
@@ -34,12 +53,20 @@ export function buildArgv(workdir, sessionId, prompt, opts) {
 }
 
 function getSubprocess() {
-  return ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs").Subprocess;
+  return ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs")
+    .Subprocess;
 }
 
 // Drive one turn. `onEvent(AgentEvent)` is called as events stream in.
 // `liveRef` (optional) gets a `.kill()` so the caller can cancel on teardown.
-export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef) {
+export async function runTurn(
+  opts,
+  workdir,
+  sessionId,
+  prompt,
+  onEvent,
+  liveRef,
+) {
   opts = opts || {};
   var Subprocess = getSubprocess();
   var command, env;
@@ -71,16 +98,29 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
   // codex `exec` also reads "additional input" from stdin and appends it to the
   // prompt; with the Subprocess stdin pipe left open it blocks forever (the turn
   // hangs at "thinking…"). Close stdin so codex gets EOF and proceeds with the arg.
-  try { proc.stdin.close(); } catch (e) {}
+  try {
+    proc.stdin.close();
+  } catch (e) {}
 
   var killed = false;
-  if (liveRef) liveRef.kill = function () { killed = true; try { proc.kill(); } catch (e) {} };
+  if (liveRef)
+    liveRef.kill = function () {
+      killed = true;
+      try {
+        proc.kill();
+      } catch (e) {}
+    };
 
   var timeoutMs = (opts.timeoutSec || 600) * 1000;
   var timer = setTimeout(function () {
     killed = true;
-    try { proc.kill(); } catch (e) {}
-    onEvent({ kind: "error", message: "codex turn timed out after " + (timeoutMs / 1000) + "s" });
+    try {
+      proc.kill();
+    } catch (e) {}
+    onEvent({
+      kind: "error",
+      message: "codex turn timed out after " + timeoutMs / 1000 + "s",
+    });
   }, timeoutMs);
 
   var buffer = "";
@@ -101,8 +141,16 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
     if (!killed && !sawTerminal) {
       if (res.exitCode !== 0) {
         var err = "";
-        try { err = await proc.stderr.readString(); } catch (e) {}
-        onEvent({ kind: "error", message: "codex exited " + res.exitCode + (err ? ": " + String(err).slice(-400) : "") });
+        try {
+          err = await proc.stderr.readString();
+        } catch (e) {}
+        onEvent({
+          kind: "error",
+          message:
+            "codex exited " +
+            res.exitCode +
+            (err ? ": " + String(err).slice(-400) : ""),
+        });
       } else {
         onEvent({ kind: "done" });
       }
@@ -110,8 +158,11 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
     return res;
   } catch (e) {
     clearTimeout(timer);
-    if (!sawTerminal) onEvent({ kind: "error", message: "codex stream error: " + e });
-    try { proc.kill(); } catch (e2) {}
+    if (!sawTerminal)
+      onEvent({ kind: "error", message: "codex stream error: " + e });
+    try {
+      proc.kill();
+    } catch (e2) {}
     return { exitCode: -1 };
   }
 }
@@ -128,8 +179,14 @@ export async function healthcheck(opts) {
     } catch (e) {
       return { ok: false, error: "codex not found" };
     }
-    var proc = await Subprocess.call({ command: command, arguments: ["--version"], environment: env, environmentAppend: true });
-    var out = "", c;
+    var proc = await Subprocess.call({
+      command: command,
+      arguments: ["--version"],
+      environment: env,
+      environmentAppend: true,
+    });
+    var out = "",
+      c;
     while ((c = await proc.stdout.readString())) out += c;
     var res = await proc.wait();
     return { ok: res.exitCode === 0, version: String(out).trim() };
