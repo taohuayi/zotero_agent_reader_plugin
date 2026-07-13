@@ -7,13 +7,14 @@
  *
  * AgentBackend = {
  *   id, label, loginHint,
- *   caps: { persistent, reasoningEffort, webSearch },   // for backend-aware UI
+ *   caps: { persistent, reasoningEffort, webSearch, modelCatalog },
  *   instructionFiles: [...],                            // written into each workdir
  *   runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef) => {exitCode},
  *   healthcheck(opts) => { ok, version?, error? },
+ *   getModelInfo(opts) => { selected, effective, source, options },
  *   shutdown(),
  * }
- * AgentEvent.kind ∈ thread_started | delta | tool | done | error  (backend-neutral)
+ * AgentEvent.kind ∈ thread_started | runtime_info | delta | tool | done | error
  */
 import * as appServer from "./appServer";
 import * as codexDriver from "./codexDriver";
@@ -23,21 +24,33 @@ var CODEX = {
   id: "codex",
   label: "Codex",
   loginHint: "run `codex login` or set the codex path",
-  caps: { persistent: true, reasoningEffort: true, webSearch: true },
+  caps: {
+    persistent: true,
+    reasoningEffort: true,
+    webSearch: true,
+    modelCatalog: true,
+  },
   instructionFiles: ["AGENTS.md"],
   runTurn: appServer.runTurn, // persistent app-server (true token streaming)
   healthcheck: codexDriver.healthcheck,
+  getModelInfo: appServer.getModelInfo,
   shutdown: appServer.shutdown,
 };
 
 var CLAUDE = {
   id: "claude",
-  label: "Claude",
+  label: "Claude Code",
   loginHint: "run `claude /login` or set the claude path",
-  caps: { persistent: false, reasoningEffort: false, webSearch: true },
+  caps: {
+    persistent: false,
+    reasoningEffort: false,
+    webSearch: true,
+    modelCatalog: false,
+  },
   instructionFiles: ["CLAUDE.md"],
   runTurn: claudeDriver.runTurn, // one process per turn + --resume
   healthcheck: claudeDriver.healthcheck,
+  getModelInfo: claudeDriver.getModelInfo,
   shutdown: claudeDriver.shutdown,
 };
 

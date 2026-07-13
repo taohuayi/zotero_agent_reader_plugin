@@ -14,6 +14,7 @@ import * as PRAStore from "./store";
 import * as PRAChatService from "./chatService";
 import * as PRAUpdater from "./updater";
 import { resolveReferenceNearPage } from "./referenceResolver";
+import { backendStatusLabel, messageModelLabel } from "./modelInfo";
 
 var SECTION_ID = null;
 var PLUGIN_ID = null;
@@ -29,11 +30,13 @@ function prefs() {
     // codex-specific
     codexPath: g("codexPath", "") || undefined,
     model: g("model", "") || undefined,
+    codexLastModel: g("codexLastModel", "") || undefined,
     reasoningEffort: g("reasoningEffort", "") || undefined, // minimal|low|medium|high — lower = faster, less deep
     sandbox: "read-only",
     // claude-specific
     claudePath: g("claudePath", "") || undefined,
     claudeModel: g("claudeModel", "") || undefined, // e.g. sonnet | haiku (default: claude's default)
+    claudeLastModel: g("claudeLastModel", "") || undefined,
     permissionMode: g("permissionMode", "") || undefined, // default (read-only allowlist applied in the driver)
     // shared
     timeoutSec: parseInt(g("timeoutSec", 600), 10) || 600,
@@ -67,6 +70,7 @@ var PRA_CSS = [
   ".pra-bubble{word-break:break-word;}",
   ".pra-bubble.user{max-width:86%;padding:8px 12px;border-radius:15px 15px 5px 15px;background:var(--accent-blue,#2563eb);color:var(--accent-white,#fff);white-space:pre-wrap;box-shadow:0 1px 2px rgba(0,0,0,.14);}",
   ".pra-bubble.assistant{max-width:100%;width:100%;white-space:pre-wrap;}",
+  ".pra-bubble.assistant[data-model-label]::before{content:attr(data-model-label);display:block;margin:0 0 5px;font-size:10.5px;line-height:1.35;letter-spacing:.01em;color:var(--fill-tertiary,#8a8f98);white-space:normal;}",
   // blinking streaming caret
   ".pra-bubble.streaming::after{content:'\\2588';margin-left:1px;font-size:.9em;color:var(--accent-blue,#2563eb);animation:pra-blink 1.05s steps(1) infinite;}",
   "@keyframes pra-blink{50%{opacity:0;}}",
@@ -404,6 +408,7 @@ function renderMessage(doc, container, msg, attachmentID) {
   var bubble = el(doc, "div");
   bubble.className =
     "pra-bubble " + (msg.role === "user" ? "user" : "assistant");
+  paintAssistantMetadata(bubble, msg);
   // a user message may carry image thumbnails (data URLs) above its text
   if (msg.role === "user" && msg.images && msg.images.length) {
     var imgsDiv = el(doc, "div");
@@ -432,6 +437,25 @@ function renderMessage(doc, container, msg, attachmentID) {
   row.appendChild(bubble);
   container.appendChild(row);
   return bubble;
+}
+
+function paintAssistantMetadata(bubble, message) {
+  if (!bubble || !message || message.role !== "assistant") return;
+  var label = messageModelLabel(message);
+  if (label) bubble.setAttribute("data-model-label", label);
+  else bubble.removeAttribute("data-model-label");
+}
+
+function rememberEffectiveModel(backendID, model) {
+  if (!model || (backendID !== "codex" && backendID !== "claude")) return;
+  try {
+    var key = backendID === "claude" ? "claudeLastModel" : "codexLastModel";
+    Zotero.Prefs.set(
+      "extensions.paper-reading-agent." + key,
+      String(model),
+      true,
+    );
+  } catch (e) {}
 }
 
 function buildSkeleton(doc, body) {
@@ -527,6 +551,7 @@ function renderAssistant(session) {
   var v = session.view,
     r = session.run;
   if (v && v.assistantBubble && r) {
+    paintAssistantMetadata(v.assistantBubble, r.message);
     setRich(
       v.assistantBubble,
       r.text,
@@ -637,6 +662,12 @@ function startTurn(session, content, images) {
       run.target = text;
       startDrip();
     },
+    onRuntimeInfo: function (m, ev) {
+      run.message = m;
+      rememberEffectiveModel(m.backend || (ev && ev.backend), m.model);
+      var v = session.view;
+      if (v && v.assistantBubble) paintAssistantMetadata(v.assistantBubble, m);
+    },
     onStatus: function (s) {
       run.lastActivity = String(s).slice(0, 120);
       paintStatus(session);
@@ -668,10 +699,10 @@ async function mount(body, item) {
 
   var p = prefs();
   var backend = getBackend(p.backend);
-  backend.healthcheck(p).then(function (h) {
+  getBackendInfo(backend.id).then(function (h) {
     ui.banner.textContent = h.ok
-      ? backend.label + " ready · " + (h.version || "")
-      : (h.error || backend.label + " unavailable") + " — " + backend.loginHint;
+      ? backendStatusLabel(h)
+      : backendStatusLabel(h) + " — " + backend.loginHint;
     ui.banner.classList.remove("ok", "err");
     ui.banner.classList.add(h.ok ? "ok" : "err");
   });
@@ -939,16 +970,30 @@ export function dump() {
 
 // Run the selected backend's healthcheck — used by the Settings pane's "Test
 // connection" button (Zotero.PaperReadingAgent.healthcheck).
-export async function healthcheck() {
+export async function getBackendInfo(backendID, forceModelRefresh) {
   var p = prefs();
+  if (backendID) p.backend = backendID;
   var backend = getBackend(p.backend);
   var h = await backend.healthcheck(p);
-  return {
+  var out = {
     ok: !!(h && h.ok),
     version: h && h.version,
     error: h && h.error,
+    id: backend.id,
     label: backend.label,
   };
+  if (out.ok && backend.getModelInfo) {
+    try {
+      out.modelInfo = await backend.getModelInfo(p, !!forceModelRefresh);
+    } catch (e) {
+      out.modelError = String(e && e.message ? e.message : e);
+    }
+  }
+  return out;
+}
+
+export async function healthcheck() {
+  return await getBackendInfo();
 }
 
 // On-demand update check/install — used by the Settings pane's "Check for updates"
@@ -967,6 +1012,7 @@ try {
     unregister: unregister,
     dump: dump,
     healthcheck: healthcheck,
+    getBackendInfo: getBackendInfo,
     checkForUpdates: checkForUpdates,
     installUpdate: installUpdate,
   };
