@@ -1,7 +1,7 @@
 {
   "name": "paper-reading-agent",
   "type": "module",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Chat with the open paper — the agent is a local codex CLI scoped to that paper's PDF.",
   "config": {
     "addonName": "Paper Reading Agent",
