@@ -46,12 +46,22 @@ export async function resolvePdfAttachment(item) {
   if (item.isAttachment && item.isAttachment()) return item;
   if (item.getAttachments) {
     var ids = item.getAttachments();
-    // prefer a PDF attachment
+    var atts = [];
     for (var i = 0; i < ids.length; i++) {
       var att = Zotero.Items.get(ids[i]);
-      if (att && att.isAttachment() && att.attachmentContentType === "application/pdf") return att;
+      if (att && att.isAttachment()) atts.push(att);
     }
-    if (ids.length) return Zotero.Items.get(ids[0]);
+    // prefer a PDF by content type
+    for (var j = 0; j < atts.length; j++) {
+      if (atts[j].attachmentContentType === "application/pdf") return atts[j];
+    }
+    // then a *.pdf filename (a PDF can carry a missing/wrong content type)
+    for (var k = 0; k < atts.length; k++) {
+      if (/\.pdf$/i.test(atts[k].attachmentFilename || "")) return atts[k];
+    }
+    // no PDF among the attachments: do NOT fall back to a non-PDF one (a web
+    // snapshot, .docx, …) — returning null yields a clear "No PDF attachment"
+    // error instead of handing the agent a file pdftotext cannot read.
   }
   return null;
 }

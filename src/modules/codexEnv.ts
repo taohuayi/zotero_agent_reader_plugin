@@ -84,7 +84,8 @@ function ensureUser(env) {
   return env;
 }
 
-// per-binary { bin: <abs path|null>, path: <login PATH|null> } — resolved once.
+// per-binary cached Promise<{ bin: <abs path|null>, path: <login PATH|null> }>.
+// Only a SUCCESSFUL resolution (bin found) is memoised — see resolveViaLoginShell.
 var SHELL_CACHE = Object.create(null);
 export function clearCache() {
   SHELL_CACHE = Object.create(null);
@@ -98,12 +99,32 @@ function between(s, a, b) {
   return s.slice(i + a.length, j).trim();
 }
 
-// Spawn the user's LOGIN shell once per binary to capture its location + the real
-// PATH (the PATH part is the same each time but harmless to re-read).
-async function resolveViaLoginShell(Subprocess, env, binName) {
+// Spawn the user's LOGIN shell to capture the binary's location + the real PATH.
+// De-dupes concurrent callers (they await the SAME in-flight promise, so a second
+// paper asked at once never reads a half-filled result), and only KEEPS a
+// successful resolution cached: a transient failure (timeout / spawn error / the
+// binary genuinely absent) is evicted so a later turn retries, instead of the
+// whole session being stuck behind a poisoned null.
+function resolveViaLoginShell(Subprocess, env, binName) {
   if (SHELL_CACHE[binName]) return SHELL_CACHE[binName];
+  var promise = runLoginShell(Subprocess, env, binName);
+  SHELL_CACHE[binName] = promise;
+  promise.then(
+    function (r) {
+      if ((!r || !r.bin) && SHELL_CACHE[binName] === promise)
+        delete SHELL_CACHE[binName];
+    },
+    function () {
+      if (SHELL_CACHE[binName] === promise) delete SHELL_CACHE[binName];
+    },
+  );
+  return promise;
+}
+
+// Actually spawn the shell and parse its output. NEVER rejects (resolves to
+// { bin:null, path:null } on timeout/error); caching + de-dup is the wrapper's job.
+async function runLoginShell(Subprocess, env, binName) {
   var cached = { bin: null, path: null };
-  SHELL_CACHE[binName] = cached;
   if (isWindows()) return cached;
   var shell = env.SHELL || "/bin/bash";
   // -l login (sources profile) + -i interactive (sources rc, where PATH edits
