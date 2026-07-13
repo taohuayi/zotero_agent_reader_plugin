@@ -19,6 +19,7 @@
 import { marked } from "marked";
 import katex from "katex";
 import DOMPurify from "dompurify";
+import { pullCitationMarkers, referenceToken } from "./referenceResolver";
 
 var _purify = null;
 function getPurify(win) {
@@ -28,7 +29,12 @@ function getPurify(win) {
   // The npm dompurify default export is callable as a factory: bind it to the
   // item-pane window so sanitization runs against that document. (A windowless
   // instance silently passes HTML through, which would defeat sanitization.)
-  _purify = (typeof D === "function") ? D(win) : ((typeof D.sanitize === "function") ? D : null);
+  _purify =
+    typeof D === "function"
+      ? D(win)
+      : typeof D.sanitize === "function"
+        ? D
+        : null;
   return _purify;
 }
 
@@ -40,28 +46,32 @@ var PATTERNS = [
   { re: /\$(?!\s)((?:\\.|[^$\\\n])+?)(?<!\s)\$/g, display: false },
 ];
 
-function isMoney(t) { return /^[\s\d.,]+$/.test(t); }            // skip "$5", "$1,000"
-function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
-function escAttr(s) { return esc(s).replace(/"/g, "&quot;"); }
-function tok(i) { return "KTXMATH" + i + "ENDKTX"; }             // survives marked + DOMPurify as plain text
-function citeTok(i) { return "KTXCITE" + i + "ENDKTX"; }
+function isMoney(t) {
+  return /^[\s\d.,]+$/.test(t);
+} // skip "$5", "$1,000"
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+function escAttr(s) {
+  return esc(s).replace(/"/g, "&quot;");
+}
+function tok(i) {
+  return "KTXMATH" + i + "ENDKTX";
+} // survives marked + DOMPurify as plain text
 
-// [p.N "verbatim quote"] / [p.N] / [pp.7-8 "..."]  — page + optional quote
-var CITE_RE = /\[pp?\.?\s*(\d{1,4})(?:\s*[-–—]\s*\d{1,4})?\s*(?:["“”‘’']([^"“”‘’'\]]{0,200})["“”‘’'])?\s*\]/g;
-
-export function render(text, win) {
+export function render(text, win, citationChecks) {
   if (!marked || !katex || text == null) return null;
 
   var src = String(text);
 
   // Pull citations out FIRST (before math) so a quote that happens to contain
   // `$` isn't mistaken for math; substituted back (post-sanitize) as click targets.
-  var cites = [];
-  src = src.replace(CITE_RE, function (m, page, quote) {
-    var i = cites.length;
-    cites.push({ page: page, quote: quote || "" });
-    return citeTok(i);
-  });
+  var pulled = pullCitationMarkers(src);
+  var cites = pulled.citations;
+  src = pulled.text;
 
   var maths = [];
   for (var p = 0; p < PATTERNS.length; p++) {
@@ -70,23 +80,34 @@ export function render(text, win) {
       if (!pat.display && isMoney(tex)) return m;
       var i = maths.length;
       maths.push({ tex: tex, display: pat.display });
-      return pat.display ? ("\n\n" + tok(i) + "\n\n") : tok(i);
+      return pat.display ? "\n\n" + tok(i) + "\n\n" : tok(i);
     });
   }
 
   var html;
-  try { html = marked.parse ? marked.parse(src, { gfm: true, breaks: true }) : marked(src); }
-  catch (e) { return null; }
+  try {
+    html = marked.parse
+      ? marked.parse(src, { gfm: true, breaks: true })
+      : marked(src);
+  } catch (e) {
+    return null;
+  }
 
   var pf = getPurify(win);
-  if (!pf) return null;                       // refuse to inject unsanitized HTML
-  try { html = pf.sanitize(html, { ADD_ATTR: ["target", "rel"] }); }
-  catch (e) { return null; }
+  if (!pf) return null; // refuse to inject unsanitized HTML
+  try {
+    html = pf.sanitize(html, { ADD_ATTR: ["target", "rel"] });
+  } catch (e) {
+    return null;
+  }
 
   for (var j = 0; j < maths.length; j++) {
     var out;
     try {
-      out = katex.renderToString(maths[j].tex, { displayMode: maths[j].display, throwOnError: false });
+      out = katex.renderToString(maths[j].tex, {
+        displayMode: maths[j].display,
+        throwOnError: false,
+      });
     } catch (e) {
       var d = maths[j].display ? "$$" : "$";
       out = esc(d + maths[j].tex + d);
@@ -98,15 +119,65 @@ export function render(text, win) {
   // click → Zotero.Reader navigation; <span>, not <a>, to bypass the launchURL handler)
   for (var c = 0; c < cites.length; c++) {
     var ct = cites[c];
-    var span = '<span class="pra-cite" data-page="' + esc(ct.page) + '"' +
-      (ct.quote ? ' title="' + escAttr(ct.quote) + '"' : "") +
-      '>[p.' + esc(ct.page) + ']</span>';
-    html = html.split(citeTok(c)).join(span);
+    var check =
+      Array.isArray(citationChecks) && citationChecks[c]
+        ? citationChecks[c]
+        : null;
+    var status = check && check.status;
+    var title = ct.quote
+      ? "Jump to this passage"
+      : "Open this physical PDF page";
+    if (status === "corrected") {
+      title =
+        "Agent cited physical p." +
+        check.reportedPage +
+        "; verified and corrected to p." +
+        ct.page;
+    } else if (status === "verified") {
+      title = "Verified on physical PDF page " + ct.page;
+    } else if (status === "ambiguous") {
+      title =
+        "Quote occurs on multiple physical pages (" +
+        (check.matchedPages || []).join(", ") +
+        "); keeping the cited p." +
+        ct.page;
+    } else if (status === "unverified") {
+      title =
+        "Quote was not found in the extracted PDF text; opening cited p." +
+        ct.page;
+    } else if (status === "page-only") {
+      title = "Page-only citation; quote verification unavailable";
+    }
+    var span =
+      '<span class="pra-cite' +
+      (status ? " " + esc(status) : "") +
+      '" data-page="' +
+      esc(ct.page) +
+      '"' +
+      (status ? ' data-citation-status="' + escAttr(status) + '"' : "") +
+      (check && check.reportedPage != null
+        ? ' data-reported-page="' + escAttr(check.reportedPage) + '"'
+        : "") +
+      (ct.quote ? ' data-quote="' + escAttr(ct.quote) + '"' : "") +
+      ' title="' +
+      escAttr(title) +
+      '"' +
+      '><span class="pra-cite-page">[p.' +
+      esc(ct.page) +
+      "]</span>" +
+      (ct.quote
+        ? ' <span class="pra-cite-quote">“' + esc(ct.quote) + "”</span>"
+        : "") +
+      "</span>";
+    html = html.split(referenceToken(c)).join(span);
   }
 
   // Self-close void elements (<br> → <br/>, etc.). The Zotero item-pane document
   // parses innerHTML as strict XHTML, where a bare <br> is malformed and THROWS;
   // marked (breaks:true) emits <br>, so normalize before it reaches innerHTML.
-  html = html.replace(/<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b([^>]*?)\s*\/?>/gi, "<$1$2/>");
+  html = html.replace(
+    /<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b([^>]*?)\s*\/?>/gi,
+    "<$1$2/>",
+  );
   return html;
 }
