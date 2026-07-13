@@ -10,9 +10,11 @@ declare namespace _ZoteroTypes {
       "backend": string;
       "codexPath": string;
       "model": string;
+      "codexLastModel": string;
       "reasoningEffort": string;
       "claudePath": string;
       "claudeModel": string;
+      "claudeLastModel": string;
       "permissionMode": string;
       "webSearch": boolean;
       "timeoutSec": number;

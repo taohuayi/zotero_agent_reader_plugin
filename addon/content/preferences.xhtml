@@ -11,23 +11,20 @@
 <vbox
   xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
   xmlns:html="http://www.w3.org/1999/xhtml"
-  style="padding: 4px 8px;"
+  style="padding: 4px 8px"
 >
   <groupbox>
     <label><html:h2>Paper Reading Agent</html:h2></label>
-    <description style="margin: 0 0 6px;">
-      Chat with the open paper. Choose which local agent CLI answers, and how it runs.
+    <description style="margin: 0 0 6px">
+      Chat with the open paper. Choose which local agent CLI answers, and how it
+      runs.
     </description>
     <hbox align="center">
-      <label value="Agent backend" style="min-width: 12em;" />
-      <menulist
-        id="pra-backend"
-        preference="backend"
-        native="true"
-      >
+      <label value="Agent backend" style="min-width: 12em" />
+      <menulist id="pra-backend" preference="backend" native="true">
         <menupopup>
           <menuitem value="codex" label="Codex" />
-          <menuitem value="claude" label="Claude" />
+          <menuitem value="claude" label="Claude Code" />
         </menupopup>
       </menulist>
     </hbox>
@@ -36,25 +33,35 @@
   <groupbox id="pra-codex-group">
     <label><html:h2>Codex</html:h2></label>
     <hbox align="center">
-      <label value="Path (optional)" style="min-width: 12em;" />
+      <label value="Path (optional)" style="min-width: 12em" />
       <html:input
         type="text"
         preference="codexPath"
         placeholder="auto-detected on PATH"
-        style="flex: 1;"
+        style="flex: 1"
       />
     </hbox>
     <hbox align="center">
-      <label value="Model" style="min-width: 12em;" />
+      <label value="Model" style="min-width: 12em" />
       <html:input
+        id="pra-codex-model"
         type="text"
         preference="model"
-        placeholder="codex default"
-        style="flex: 1;"
+        list="pra-codex-models"
+        placeholder="Codex config/default"
+        style="flex: 1"
       />
+      <button id="pra-codex-model-default" label="Use default" />
+      <button id="pra-codex-model-refresh" label="Refresh" />
     </hbox>
+    <html:datalist id="pra-codex-models"></html:datalist>
+    <description
+      id="pra-codex-model-status"
+      style="margin: 2px 0 5px 12em; color: var(--fill-secondary, #666)"
+      >Loading model information…</description
+    >
     <hbox align="center">
-      <label value="Reasoning effort" style="min-width: 12em;" />
+      <label value="Reasoning effort" style="min-width: 12em" />
       <menulist preference="reasoningEffort" native="true">
         <menupopup>
           <menuitem value="" label="Default" />
@@ -68,27 +75,37 @@
   </groupbox>
 
   <groupbox id="pra-claude-group">
-    <label><html:h2>Claude</html:h2></label>
+    <label><html:h2>Claude Code</html:h2></label>
     <hbox align="center">
-      <label value="Path (optional)" style="min-width: 12em;" />
+      <label value="Path (optional)" style="min-width: 12em" />
       <html:input
         type="text"
         preference="claudePath"
         placeholder="auto-detected on PATH"
-        style="flex: 1;"
+        style="flex: 1"
       />
     </hbox>
     <hbox align="center">
-      <label value="Model" style="min-width: 12em;" />
+      <label value="Model" style="min-width: 12em" />
       <html:input
+        id="pra-claude-model"
         type="text"
         preference="claudeModel"
-        placeholder="claude default — e.g. sonnet, haiku"
-        style="flex: 1;"
+        list="pra-claude-models"
+        placeholder="Claude Code default"
+        style="flex: 1"
       />
+      <button id="pra-claude-model-default" label="Use default" />
+      <button id="pra-claude-model-refresh" label="Refresh" />
     </hbox>
+    <html:datalist id="pra-claude-models"></html:datalist>
+    <description
+      id="pra-claude-model-status"
+      style="margin: 2px 0 5px 12em; color: var(--fill-secondary, #666)"
+      >Loading model information…</description
+    >
     <hbox align="center">
-      <label value="Permission mode" style="min-width: 12em;" />
+      <label value="Permission mode" style="min-width: 12em" />
       <menulist preference="permissionMode" native="true">
         <menupopup>
           <menuitem value="default" label="default (read-only)" />
@@ -105,15 +122,21 @@
       <checkbox preference="webSearch" label="Enable web search" />
     </hbox>
     <hbox align="center">
-      <label value="Turn timeout (seconds)" style="min-width: 12em;" />
-      <html:input type="number" preference="timeoutSec" min="30" max="3600" style="width: 7em;" />
+      <label value="Turn timeout (seconds)" style="min-width: 12em" />
+      <html:input
+        type="number"
+        preference="timeoutSec"
+        min="30"
+        max="3600"
+        style="width: 7em"
+      />
     </hbox>
   </groupbox>
 
   <groupbox>
     <hbox align="center">
       <button id="pra-test" label="Test connection" />
-      <label id="pra-test-status" value="" style="margin-inline-start: 8px;" />
+      <label id="pra-test-status" value="" style="margin-inline-start: 8px" />
     </hbox>
   </groupbox>
 
@@ -121,8 +144,13 @@
     <label><html:h2>Updates</html:h2></label>
     <hbox align="center">
       <button id="pra-check-update" label="Check for updates" />
-      <button id="pra-install-update" label="Install update" hidden="true" style="margin-inline-start: 8px;" />
-      <label id="pra-update-status" value="" style="margin-inline-start: 8px;" />
+      <button
+        id="pra-install-update"
+        label="Install update"
+        hidden="true"
+        style="margin-inline-start: 8px"
+      />
+      <label id="pra-update-status" value="" style="margin-inline-start: 8px" />
     </hbox>
   </groupbox>
 </vbox>

@@ -7,9 +7,11 @@
 pref("backend", "codex"); // codex | claude
 pref("codexPath", ""); // absolute path to the codex binary (else search PATH)
 pref("model", ""); // codex model (else codex config)
+pref("codexLastModel", ""); // last model actually reported by codex app-server
 pref("reasoningEffort", ""); // codex: minimal | low | medium | high
 pref("claudePath", ""); // absolute path to the claude binary (else search PATH)
 pref("claudeModel", ""); // claude: sonnet | haiku | opus | … (else claude default)
+pref("claudeLastModel", ""); // last model actually reported by Claude Code
 pref("permissionMode", "default"); // claude permission mode (default = read-only allowlist)
 pref("webSearch", true);
 pref("timeoutSec", 600);

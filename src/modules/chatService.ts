@@ -49,9 +49,12 @@ export function applyCitationVerification(assistant, ctx) {
 export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
   // images: [{ path, thumb }] — path is the on-disk file (sent to the backend),
   // thumb is a small data URL kept only for re-rendering the bubble after reload.
+  var backend = getBackend(opts.backend);
   var userMsg = { role: "user", content: content };
   if (images && images.length) userMsg.images = images;
-  var assistant = { role: "assistant", content: "" };
+  var assistant = { role: "assistant", content: "", backend: backend.id };
+  var requestedModel = backend.id === "claude" ? opts.claudeModel : opts.model;
+  if (requestedModel) assistant.requestedModel = requestedModel;
   conv.messages.push(userMsg);
   conv.messages.push(assistant);
   await PRAStore.save(conv);
@@ -60,7 +63,6 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
 
   var terminalEvent = null;
 
-  var backend = getBackend(opts.backend);
   var handle = PRAStore.getSessionHandle(conv, backend.id);
   var backendPrompt = buildBackendPrompt(content, ctx);
   // let the backend read files outside the workdir (the PDF lives in Zotero's
@@ -90,6 +92,31 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
             PRAStore.setSessionHandle(conv, backend.id, ev.sessionId)
           ) {
             PRAStore.save(conv);
+          }
+        } else if (ev.kind === "runtime_info") {
+          var before = [
+            assistant.model || "",
+            assistant.modelProvider || "",
+            assistant.reasoningEffort || "",
+            assistant.modelSource || "",
+          ].join("\n");
+          if (ev.backend) assistant.backend = ev.backend;
+          if (ev.model) assistant.model = ev.model;
+          if (ev.modelProvider) assistant.modelProvider = ev.modelProvider;
+          if (ev.reasoningEffort)
+            assistant.reasoningEffort = ev.reasoningEffort;
+          if (ev.source) assistant.modelSource = ev.source;
+          var after = [
+            assistant.model || "",
+            assistant.modelProvider || "",
+            assistant.reasoningEffort || "",
+            assistant.modelSource || "",
+          ].join("\n");
+          if (before !== after) {
+            // Best-effort intermediate persistence: the final save below remains
+            // authoritative, but this preserves metadata if Zotero closes mid-turn.
+            PRAStore.save(conv);
+            if (ui.onRuntimeInfo) ui.onRuntimeInfo(assistant, ev);
           }
         } else if (ev.kind === "delta") {
           assistant.content += ev.text;

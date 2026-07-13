@@ -28,11 +28,17 @@
  *      non-JSON line can precede the result (e.g. a bad --resume) — we skip non-JSON.
  */
 import { resolveClaude } from "./codexEnv";
+import { claudeModelInfo } from "./modelInfo";
 
 function getSubprocess() {
-  return ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs").Subprocess;
+  return ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs")
+    .Subprocess;
 }
-function log(m) { try { Zotero.debug("[PaperReadingAgent] claudeDriver: " + m); } catch (e) {} }
+function log(m) {
+  try {
+    Zotero.debug("[PaperReadingAgent] claudeDriver: " + m);
+  } catch (e) {}
+}
 
 // Directory of an absolute path (pure string op so buildArgv stays Node-testable —
 // no PathUtils). Handles both / and \ separators.
@@ -56,14 +62,17 @@ export function buildArgv(workdir, sessionId, prompt, opts) {
   // mis-parsed by claude's CLI parser as an unknown option.
   var argv = [
     "-p",
-    "--output-format", "stream-json",
+    "--output-format",
+    "stream-json",
     "--include-partial-messages",
     "--verbose",
-    "--permission-mode", opts.permissionMode || "default",
+    "--permission-mode",
+    opts.permissionMode || "default",
   ];
   // grant read access to the workdir (CLAUDE.md) and the PDF's directory.
   argv.push("--add-dir", workdir);
-  if (opts.addDir && opts.addDir !== workdir) argv.push("--add-dir", opts.addDir);
+  if (opts.addDir && opts.addDir !== workdir)
+    argv.push("--add-dir", opts.addDir);
   // grant read access to each attached image's directory (deduped; skip ones already
   // covered by workdir/addDir). claude has no image input flag — it "sees" an image
   // by reading the file with its (multimodal) Read tool, so the dir must be allowed.
@@ -76,7 +85,8 @@ export function buildArgv(workdir, sessionId, prompt, opts) {
       var d = parentDir(opts.images[di]);
       if (covered.indexOf(d) < 0 && imgDirs.indexOf(d) < 0) imgDirs.push(d);
     }
-    for (var dj = 0; dj < imgDirs.length; dj++) argv.push("--add-dir", imgDirs[dj]);
+    for (var dj = 0; dj < imgDirs.length; dj++)
+      argv.push("--add-dir", imgDirs[dj]);
   }
   // --allowedTools is variadic; --disallowedTools (a flag) terminates the list.
   var allow = RO_ALLOW.slice();
@@ -110,7 +120,11 @@ function friendlyError(message) {
   var low = String(message || "").toLowerCase();
   if (low.indexOf("not logged in") >= 0 || low.indexOf("/login") >= 0)
     return "Claude is not logged in — run `claude /login` in a terminal.";
-  if (low.indexOf("rate limit") >= 0 || low.indexOf("out_of_credits") >= 0 || low.indexOf("overage") >= 0)
+  if (
+    low.indexOf("rate limit") >= 0 ||
+    low.indexOf("out_of_credits") >= 0 ||
+    low.indexOf("overage") >= 0
+  )
     return "Claude is rate limited or out of credits — wait a bit or check your plan.";
   return message;
 }
@@ -120,8 +134,36 @@ export function mapLine(msg) {
   var t = msg && msg.type;
 
   if (t === "system") {
-    if (msg.subtype === "init" && msg.session_id)
-      return [{ kind: "thread_started", sessionId: msg.session_id }];
+    if (msg.subtype === "init") {
+      var initEvents = [];
+      if (msg.session_id)
+        initEvents.push({ kind: "thread_started", sessionId: msg.session_id });
+      if (msg.model && msg.model !== "<synthetic>")
+        initEvents.push({
+          kind: "runtime_info",
+          backend: "claude",
+          model: msg.model,
+          source: "system-init",
+        });
+      return initEvents;
+    }
+    return [];
+  }
+
+  // Claude duplicates answer text in this full assistant message, so continue to
+  // ignore its content. It is, however, the authoritative place where Claude
+  // Code reports the concrete model behind an alias/default.
+  if (t === "assistant") {
+    var model = (msg.message && msg.message.model) || msg.model || "";
+    if (model && model !== "<synthetic>")
+      return [
+        {
+          kind: "runtime_info",
+          backend: "claude",
+          model: model,
+          source: "assistant-message",
+        },
+      ];
     return [];
   }
 
@@ -130,7 +172,11 @@ export function mapLine(msg) {
     if (e.type === "content_block_delta") {
       var d = e.delta || {};
       // ONLY text_delta is answer text; thinking_delta/input_json_delta share this envelope.
-      if (d.type === "text_delta" && typeof d.text === "string" && d.text.length)
+      if (
+        d.type === "text_delta" &&
+        typeof d.text === "string" &&
+        d.text.length
+      )
         return [{ kind: "delta", text: d.text }];
       return [];
     }
@@ -139,7 +185,9 @@ export function mapLine(msg) {
       if (cb.type === "tool_use") {
         var detail = "";
         if (cb.input && typeof cb.input === "object") {
-          try { detail = JSON.stringify(cb.input); } catch (e2) {}
+          try {
+            detail = JSON.stringify(cb.input);
+          } catch (e2) {}
           if (detail === "{}") detail = "";
         }
         return [{ kind: "tool", toolName: cb.name || "tool", detail: detail }];
@@ -153,7 +201,8 @@ export function mapLine(msg) {
     // is_error is the ONLY reliable terminal signal (subtype stays "success").
     if (msg.is_error) {
       var m = "";
-      if (Array.isArray(msg.errors) && msg.errors.length) m = msg.errors.join("; ");
+      if (Array.isArray(msg.errors) && msg.errors.length)
+        m = msg.errors.join("; ");
       else if (typeof msg.result === "string" && msg.result) m = msg.result;
       else m = "claude turn failed";
       return [{ kind: "error", message: friendlyError(m) }];
@@ -167,7 +216,14 @@ export function mapLine(msg) {
 }
 
 // Drive one turn. Same contract as the codex drivers' runTurn.
-export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef) {
+export async function runTurn(
+  opts,
+  workdir,
+  sessionId,
+  prompt,
+  onEvent,
+  liveRef,
+) {
   opts = opts || {};
   var Subprocess = getSubprocess();
   var command, env;
@@ -197,7 +253,9 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
   }
 
   // -p reads no stdin; close it so claude never blocks waiting for input.
-  try { proc.stdin.close(); } catch (e) {}
+  try {
+    proc.stdin.close();
+  } catch (e) {}
 
   var killed = false;
   var sawTerminal = false;
@@ -205,23 +263,43 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
   var gotThread = false;
   var resumeFailed = false;
   var timer = null;
-  function stopTimer() { if (timer) { try { clearTimeout(timer); } catch (e) {} timer = null; } }
+  function stopTimer() {
+    if (timer) {
+      try {
+        clearTimeout(timer);
+      } catch (e) {}
+      timer = null;
+    }
+  }
   // exactly one terminal event per turn (no events after done/error/cancel).
-  function emitTerminal(ev) { if (sawTerminal) return; sawTerminal = true; stopTimer(); onEvent(ev); }
-
-  if (liveRef) liveRef.kill = function () {
+  function emitTerminal(ev) {
     if (sawTerminal) return;
-    killed = true;
-    try { proc.kill(); } catch (e) {}
-    emitTerminal({ kind: "error", message: "cancelled" });
-  };
+    sawTerminal = true;
+    stopTimer();
+    onEvent(ev);
+  }
+
+  if (liveRef)
+    liveRef.kill = function () {
+      if (sawTerminal) return;
+      killed = true;
+      try {
+        proc.kill();
+      } catch (e) {}
+      emitTerminal({ kind: "error", message: "cancelled" });
+    };
 
   var timeoutMs = (opts.timeoutSec || 600) * 1000;
   timer = setTimeout(function () {
     if (sawTerminal) return;
     killed = true;
-    try { proc.kill(); } catch (e) {}
-    emitTerminal({ kind: "error", message: "claude turn timed out after " + (timeoutMs / 1000) + "s" });
+    try {
+      proc.kill();
+    } catch (e) {}
+    emitTerminal({
+      kind: "error",
+      message: "claude turn timed out after " + timeoutMs / 1000 + "s",
+    });
   }, timeoutMs);
 
   var buffer = "";
@@ -236,7 +314,11 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
         buffer = buffer.slice(nl + 1);
         if (!line) continue;
         var msg;
-        try { msg = JSON.parse(line); } catch (e) { continue; } // skip non-JSON (e.g. "No conversation found")
+        try {
+          msg = JSON.parse(line);
+        } catch (e) {
+          continue;
+        } // skip non-JSON (e.g. "No conversation found")
         var evs = mapLine(msg);
         for (var i = 0; i < evs.length; i++) {
           var ev = evs[i];
@@ -252,8 +334,16 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
           }
           // out-of-credits / rate-limited turns come back as is_error:false but
           // EMPTY (no deltas, output_tokens 0). Don't show the user a blank "done".
-          if (ev.kind === "done" && !gotText && !(msg.usage && msg.usage.output_tokens)) {
-            ev = { kind: "error", message: "Claude returned an empty response — you may be rate limited or out of credits. Try again shortly or check your Claude usage." };
+          if (
+            ev.kind === "done" &&
+            !gotText &&
+            !(msg.usage && msg.usage.output_tokens)
+          ) {
+            ev = {
+              kind: "error",
+              message:
+                "Claude returned an empty response — you may be rate limited or out of credits. Try again shortly or check your Claude usage.",
+            };
           }
           if (ev.kind === "done" || ev.kind === "error") emitTerminal(ev);
           else onEvent(ev);
@@ -274,8 +364,16 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
     if (!killed && !sawTerminal) {
       if (res.exitCode !== 0) {
         var err = "";
-        try { err = await proc.stderr.readString(); } catch (e) {}
-        emitTerminal({ kind: "error", message: "claude exited " + res.exitCode + (err ? ": " + String(err).slice(-400) : "") });
+        try {
+          err = await proc.stderr.readString();
+        } catch (e) {}
+        emitTerminal({
+          kind: "error",
+          message:
+            "claude exited " +
+            res.exitCode +
+            (err ? ": " + String(err).slice(-400) : ""),
+        });
       } else {
         emitTerminal({ kind: "done" });
       }
@@ -284,7 +382,9 @@ export async function runTurn(opts, workdir, sessionId, prompt, onEvent, liveRef
   } catch (e) {
     stopTimer();
     emitTerminal({ kind: "error", message: "claude stream error: " + e });
-    try { proc.kill(); } catch (e2) {}
+    try {
+      proc.kill();
+    } catch (e2) {}
     return { exitCode: -1 };
   }
 }
@@ -301,14 +401,24 @@ export async function healthcheck(opts) {
     } catch (e) {
       return { ok: false, error: "claude not found" };
     }
-    var proc = await Subprocess.call({ command: command, arguments: ["--version"], environment: env, environmentAppend: true });
-    var out = "", c;
+    var proc = await Subprocess.call({
+      command: command,
+      arguments: ["--version"],
+      environment: env,
+      environmentAppend: true,
+    });
+    var out = "",
+      c;
     while ((c = await proc.stdout.readString())) out += c;
     var res = await proc.wait();
     return { ok: res.exitCode === 0, version: String(out).trim() };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+export async function getModelInfo(opts, _forceRefresh) {
+  return claudeModelInfo(opts || {});
 }
 
 // one-process-per-turn: nothing persistent to tear down (per-turn procs are

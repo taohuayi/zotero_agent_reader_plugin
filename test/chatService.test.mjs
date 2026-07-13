@@ -76,7 +76,7 @@ test("backend reminder is added without changing the stored user text", () => {
   assert.match(prompt, /never count form-feeds/);
 });
 
-function scenario(terminalEvent) {
+function scenario(terminalEvent, runtimeInfo) {
   const quote =
     "the proposed estimator consistently recovers the correct graph from observational samples";
   const answer = `Claim [p.5 "${quote}"]`;
@@ -85,13 +85,15 @@ function scenario(terminalEvent) {
   const statuses = [];
   const events = [];
   const prompts = [];
+  const runtimeUpdates = [];
   globalThis.__praSaves = [];
   globalThis.__praLoadCalls = [];
   globalThis.__praLoadedPages = pages;
   globalThis.__praBackend = {
-    id: "fake",
+    id: "codex",
     async runTurn(_opts, _workdir, _handle, backendPrompt, onEvent) {
       prompts.push(backendPrompt);
+      if (runtimeInfo) onEvent(runtimeInfo);
       onEvent({ kind: "delta", text: answer });
       onEvent(terminalEvent);
       return { exitCode: terminalEvent.kind === "error" ? 1 : 0 };
@@ -105,6 +107,12 @@ function scenario(terminalEvent) {
       updates.push(text);
       events.push("update:" + text);
     },
+    onRuntimeInfo(message, event) {
+      runtimeUpdates.push({
+        message: JSON.parse(JSON.stringify(message)),
+        event: JSON.parse(JSON.stringify(event)),
+      });
+    },
     onStatus(text) {
       statuses.push(text);
       events.push("status:" + text);
@@ -116,7 +124,18 @@ function scenario(terminalEvent) {
       events.push("error:" + message);
     },
   };
-  return { quote, answer, pages, updates, statuses, events, prompts, conv, ui };
+  return {
+    quote,
+    answer,
+    pages,
+    updates,
+    statuses,
+    events,
+    prompts,
+    runtimeUpdates,
+    conv,
+    ui,
+  };
 }
 
 test("verifies, corrects, renders, and persists citations before done", async () => {
@@ -168,4 +187,37 @@ test("also persists a corrected partial answer before reporting an error", async
   assert.equal(s.conv.messages[1].content, corrected);
   assert.equal(globalThis.__praSaves.at(-1).messages[1].content, corrected);
   assert.equal(s.events.at(-1), "error:cancelled");
+});
+
+test("persists requested backend and actual runtime model on the response", async () => {
+  const s = scenario(
+    { kind: "done" },
+    {
+      kind: "runtime_info",
+      backend: "codex",
+      model: "gpt-5.6-codex",
+      modelProvider: "openai",
+      reasoningEffort: "high",
+      source: "thread-settings",
+    },
+  );
+  await chatService.runTurn(
+    { backend: "codex", model: "gpt-5.6-codex" },
+    { workdir: "/work", pageTextPages: s.pages },
+    s.conv,
+    "question",
+    null,
+    s.ui,
+    {},
+  );
+
+  const response = s.conv.messages[1];
+  assert.equal(response.backend, "codex");
+  assert.equal(response.requestedModel, "gpt-5.6-codex");
+  assert.equal(response.model, "gpt-5.6-codex");
+  assert.equal(response.modelProvider, "openai");
+  assert.equal(response.reasoningEffort, "high");
+  assert.equal(response.modelSource, "thread-settings");
+  assert.equal(s.runtimeUpdates.length, 1);
+  assert.equal(globalThis.__praSaves.at(-1).messages[1].model, "gpt-5.6-codex");
 });
