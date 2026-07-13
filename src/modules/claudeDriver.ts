@@ -200,7 +200,7 @@ export function mapLine(msg) {
   if (t === "result") {
     // is_error is the ONLY reliable terminal signal (subtype stays "success").
     if (msg.is_error) {
-      var m = "";
+      var m;
       if (Array.isArray(msg.errors) && msg.errors.length)
         m = msg.errors.join("; ");
       else if (typeof msg.result === "string" && msg.result) m = msg.result;

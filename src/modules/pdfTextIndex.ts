@@ -148,8 +148,8 @@ async function extractWithPdfToText(pdfPath) {
 
 function runtimeDeps() {
   return {
-    join: function () {
-      return PathUtils.join.apply(PathUtils, arguments);
+    join: function (...parts) {
+      return PathUtils.join(...parts);
     },
     stat: function (path) {
       return IOUtils.stat(path);

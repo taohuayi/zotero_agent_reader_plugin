@@ -56,13 +56,13 @@ paper, with multi-turn memory. Everything runs locally with your own
 Set via **Settings → Advanced → Config Editor**
 (`extensions.paper-reading-agent.…`):
 
-| Pref | Default | Meaning |
-|---|---|---|
-| `codexPath` | *(search PATH)* | Absolute path to `codex` (set this if the banner says "codex not found"). |
-| `model` | *(codex config)* | Override the codex model. |
-| `reasoningEffort` | *(codex default)* | `minimal` / `low` / `medium` / `high` — lower = faster, less deep. (`minimal` is incompatible with web search; when `webSearch` is on it is automatically raised to `low`.) |
-| `timeoutSec` | `600` | Per-turn timeout. |
-| `webSearch` | `true` | Set `false` to disable codex web search. |
+| Pref              | Default           | Meaning                                                                                                                                                                     |
+| ----------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codexPath`       | _(search PATH)_   | Absolute path to `codex` (set this if the banner says "codex not found").                                                                                                   |
+| `model`           | _(codex config)_  | Override the codex model.                                                                                                                                                   |
+| `reasoningEffort` | _(codex default)_ | `minimal` / `low` / `medium` / `high` — lower = faster, less deep. (`minimal` is incompatible with web search; when `webSearch` is on it is automatically raised to `low`.) |
+| `timeoutSec`      | `600`             | Per-turn timeout.                                                                                                                                                           |
+| `webSearch`       | `true`            | Set `false` to disable codex web search.                                                                                                                                    |
 
 ## Development
 
@@ -83,5 +83,5 @@ npm run release # version bump + GitHub release + update.json
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 > **Note:** the codex `app-server` JSON-RPC protocol this plugin drives is marked
-> *experimental* by codex and pinned to **0.130.x** — a codex upgrade may change
+> _experimental_ by codex and pinned to **0.130.x** — a codex upgrade may change
 > it and require an update here.

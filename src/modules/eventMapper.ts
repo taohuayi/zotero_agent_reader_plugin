@@ -11,16 +11,32 @@
  *   kind ∈ "thread_started" | "delta" | "tool" | "done" | "error"
  */
 
-var AGENT_MESSAGE_TYPES = { agent_message: 1, assistant_message: 1, message: 1 };
-var TOOL_TYPES = { command_execution: 1, web_search: 1, file_search: 1, mcp_tool_call: 1 };
+var AGENT_MESSAGE_TYPES = {
+  agent_message: 1,
+  assistant_message: 1,
+  message: 1,
+};
+var TOOL_TYPES = {
+  command_execution: 1,
+  web_search: 1,
+  file_search: 1,
+  mcp_tool_call: 1,
+};
 var RATE_LIMIT_MARKERS = [
-  "rate limit exceeded", "rate_limit_exceeded", "quota exceeded", "too many requests",
+  "rate limit exceeded",
+  "rate_limit_exceeded",
+  "quota exceeded",
+  "too many requests",
 ];
 
 export function extractText(item) {
   var txt = item.text || item.message || item.content;
   if (Array.isArray(txt)) {
-    txt = txt.map(function (b) { return b && b.text ? b.text : ""; }).join(" ");
+    txt = txt
+      .map(function (b) {
+        return b && b.text ? b.text : "";
+      })
+      .join(" ");
   }
   return (txt || "").trim();
 }
@@ -40,7 +56,13 @@ export function mapEvent(ev) {
   var top = ev && ev.type;
 
   if (top === "thread.started") {
-    return [{ kind: "thread_started", sessionId: ev.thread_id || ev.session_id || ev.id, raw: ev }];
+    return [
+      {
+        kind: "thread_started",
+        sessionId: ev.thread_id || ev.session_id || ev.id,
+        raw: ev,
+      },
+    ];
   }
 
   if (top === "item.completed") {
@@ -53,7 +75,9 @@ export function mapEvent(ev) {
     if (TOOL_TYPES[itype]) {
       var detail = item.command || item.query || item.name || "";
       if (Array.isArray(detail)) detail = detail.join(" ");
-      return [{ kind: "tool", toolName: itype, detail: String(detail), raw: ev }];
+      return [
+        { kind: "tool", toolName: itype, detail: String(detail), raw: ev },
+      ];
     }
     return [];
   }
@@ -63,7 +87,13 @@ export function mapEvent(ev) {
   }
 
   if (top === "turn.failed" || top === "error") {
-    return [{ kind: "error", message: friendlyError(JSON.stringify(ev).slice(0, 600)), raw: ev }];
+    return [
+      {
+        kind: "error",
+        message: friendlyError(JSON.stringify(ev).slice(0, 600)),
+        raw: ev,
+      },
+    ];
   }
 
   return []; // turn.started, item.started, etc. — ignored
@@ -81,7 +111,11 @@ export function consume(buffer, chunk) {
     buffer = buffer.slice(nl + 1);
     if (!line) continue;
     var ev;
-    try { ev = JSON.parse(line); } catch (e) { continue; }
+    try {
+      ev = JSON.parse(line);
+    } catch (e) {
+      continue;
+    }
     var mapped = mapEvent(ev);
     for (var i = 0; i < mapped.length; i++) events.push(mapped[i]);
   }

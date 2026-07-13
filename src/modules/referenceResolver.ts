@@ -630,7 +630,7 @@ export async function resolveReferencePosition(
 
   var timeoutMs = Math.max(250, options.timeoutMs || 3500);
   var deadline = Date.now() + timeoutMs;
-  var direct = null;
+  var direct;
   try {
     direct = await resolveFromPageCharacters(
       view,
