@@ -15,6 +15,7 @@ import * as PRAChatService from "./chatService";
 import * as PRAUpdater from "./updater";
 import { resolveReferenceNearPage } from "./referenceResolver";
 import { backendStatusLabel, messageModelLabel } from "./modelInfo";
+import { preserveStreamingScroll, scrollToBottom } from "./streamingScroll";
 
 var SECTION_ID = null;
 var PLUGIN_ID = null;
@@ -551,14 +552,15 @@ function renderAssistant(session) {
   var v = session.view,
     r = session.run;
   if (v && v.assistantBubble && r) {
-    paintAssistantMetadata(v.assistantBubble, r.message);
-    setRich(
-      v.assistantBubble,
-      r.text,
-      v.attachmentID,
-      r.message && r.message.citations,
-    );
-    v.ui.messages.scrollTop = v.ui.messages.scrollHeight;
+    preserveStreamingScroll(v.ui.messages, function () {
+      paintAssistantMetadata(v.assistantBubble, r.message);
+      setRich(
+        v.assistantBubble,
+        r.text,
+        v.attachmentID,
+        r.message && r.message.citations,
+      );
+    });
   }
 }
 function scheduleRender(session) {
@@ -642,7 +644,7 @@ function startTurn(session, content, images) {
       var v = session.view;
       if (v) {
         renderMessage(v.doc, v.ui.messages, m, v.attachmentID);
-        v.ui.messages.scrollTop = v.ui.messages.scrollHeight;
+        scrollToBottom(v.ui.messages);
       }
     },
     onAssistantStart: function (m) {
@@ -656,6 +658,9 @@ function startTurn(session, content, images) {
           v.attachmentID,
         );
         v.assistantBubble.classList.add("streaming");
+        // Appending the empty assistant row changes scrollHeight before the
+        // first token. Keep the just-started turn in follow mode.
+        scrollToBottom(v.ui.messages);
       }
     },
     onAssistantUpdate: function (text) {
