@@ -144,3 +144,60 @@ test("Codex turn params switch or clear model per turn and preserve effort rules
     "minimal",
   );
 });
+
+function addDirs(argv) {
+  const out = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--add-dir") out.push(argv[i + 1]);
+  }
+  return out;
+}
+
+test("Claude is granted every directory it must read, minimally", () => {
+  const argv = claude.buildArgv("/work", null, "hi", {
+    webSearch: false,
+    addDir: "/storage/ABCD", // the PDF's directory…
+    addDirs: ["/data/library", "/storage"], // …lives under the storage grant
+    images: ["/work/images/a.png", "/tmp/shot.png"],
+  });
+  // --add-dir is recursive: /storage subsumes /storage/ABCD, /work subsumes
+  // /work/images. Only /tmp is genuinely new.
+  assert.deepEqual(addDirs(argv), [
+    "/work",
+    "/data/library",
+    "/storage",
+    "/tmp",
+  ]);
+});
+
+test("a directory named twice is granted once", () => {
+  const argv = claude.buildArgv("/work", null, "hi", {
+    webSearch: false,
+    addDir: "/work",
+    addDirs: ["/work", "/data/library", "/data/library"],
+    images: ["/work/a.png"],
+  });
+  assert.deepEqual(addDirs(argv), ["/work", "/data/library"]);
+});
+
+test("a sibling with a shared prefix is not mistaken for a child", () => {
+  const argv = claude.buildArgv("/work", null, "hi", {
+    webSearch: false,
+    addDirs: ["/workshop", "/work-2"],
+  });
+  assert.deepEqual(addDirs(argv), ["/work", "/workshop", "/work-2"]);
+});
+
+test("library search needs rg, and Bash stays scoped to read-only commands", () => {
+  const argv = claude.buildArgv("/work", null, "hi", { webSearch: false });
+  const allowed = argv.slice(
+    argv.indexOf("--allowedTools") + 1,
+    argv.indexOf("--disallowedTools"),
+  );
+  assert.ok(allowed.includes("Bash(rg:*)"));
+  assert.ok(allowed.includes("Bash(pdftotext:*)"));
+  // no unscoped Bash — the agent must not be able to route a write through it
+  assert.ok(!allowed.includes("Bash"));
+  const denied = argv.slice(argv.indexOf("--disallowedTools") + 1, -2);
+  assert.ok(denied.includes("Write"));
+});

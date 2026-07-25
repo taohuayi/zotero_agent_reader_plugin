@@ -42,3 +42,72 @@ test("fallback instructions remain usable when indexing is unavailable", () => {
   assert.doesNotMatch(instructions, /explicit marker on\s+the SAME page/);
   assert.doesNotMatch(instructions, /null physical pages/);
 });
+
+const LIBRARY = {
+  workdir: "/data/library",
+  storage: "/data/storage",
+  files: {
+    catalog: "/data/library/catalog.tsv",
+    collections: "/data/library/collections.md",
+    annotations: "/data/library/annotations.md",
+    notes: "/data/library/notes.md",
+  },
+  stats: {
+    itemCount: 456,
+    collectionCount: 111,
+    annotationCount: 1467,
+    noteCount: 168,
+  },
+};
+
+test("library access is absent from the instructions unless enabled", () => {
+  assert.equal(itemContext.buildLibrarySection(null), "");
+  assert.equal(itemContext.buildLibrarySection({}), "");
+  const withoutLibrary = itemContext.buildAgentInstructions(
+    "Test Paper",
+    "/tmp/paper.pdf",
+    null,
+    null,
+  );
+  assert.ok(!withoutLibrary.includes("the rest of the library".toLowerCase()));
+  assert.ok(!withoutLibrary.includes("zotero-ft-cache"));
+});
+
+test("the library section carries both mandatory search flags", () => {
+  const section = itemContext.buildLibrarySection(LIBRARY);
+  // rg skips dot-files, and .zotero-ft-cache is one
+  assert.ok(section.includes("--hidden"));
+  // case-sensitive search was measured to miss 14% of matching papers
+  assert.ok(section.includes("`-i`"));
+  assert.ok(section.includes("/data/library/catalog.tsv"));
+  assert.ok(section.includes("/data/storage"));
+  assert.ok(section.includes("456"));
+});
+
+test("the extraction cache is never presented as a source of page numbers", () => {
+  const section = itemContext.buildLibrarySection(LIBRARY);
+  assert.ok(section.includes("no page markers"));
+  assert.ok(section.includes("never cite that"));
+  // no cross-paper citation marker: chatPanel can only resolve [p.N "quote"]
+  // against THIS paper, so a [@key …] form would render as dead text
+  assert.ok(!section.includes("[@"));
+});
+
+test("enabling library access appends the section to the paper instructions", () => {
+  const instructions = itemContext.buildAgentInstructions(
+    "Test Paper",
+    "/tmp/paper.pdf",
+    "/tmp/work/paper-physical-pages.txt",
+    12,
+    LIBRARY,
+  );
+  // the per-paper contract is untouched
+  assert.ok(instructions.includes('[p.N "short verbatim quote"]'));
+  assert.ok(instructions.includes("PRA_PHYSICAL_PDF_PAGE:"));
+  // and the library is appended after it
+  assert.ok(instructions.includes("zotero-ft-cache"));
+  assert.ok(
+    instructions.indexOf("zotero-ft-cache") >
+      instructions.indexOf('[p.N "short verbatim quote"]'),
+  );
+});

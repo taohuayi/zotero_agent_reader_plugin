@@ -18,6 +18,7 @@ declare namespace _ZoteroTypes {
       "permissionMode": string;
       "webSearch": boolean;
       "timeoutSec": number;
+      "libraryAccess": boolean;
     };
   }
 }

@@ -14,3 +14,7 @@ pref("claudeLastModel", ""); // last model actually reported by Claude Code
 pref("permissionMode", "default"); // claude permission mode (default = read-only allowlist)
 pref("webSearch", true);
 pref("timeoutSec", 600);
+// Off by default: it lets the agent read the WHOLE library (catalog, your
+// annotations/notes, and Zotero's full-text extraction cache), not just the
+// open paper — so more of your library reaches the CLI's provider.
+pref("libraryAccess", false);
