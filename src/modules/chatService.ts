@@ -71,6 +71,14 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
   try {
     runOpts = Object.assign({}, opts);
     if (ctx.pdfPath) runOpts.addDir = PathUtils.parent(ctx.pdfPath);
+    // library access (when enabled): the snapshot dir plus Zotero's storage
+    // tree, which holds the full-text extraction cache the agent greps
+    if (ctx.library) {
+      var extraDirs = [];
+      if (ctx.library.workdir) extraDirs.push(ctx.library.workdir);
+      if (ctx.library.storage) extraDirs.push(ctx.library.storage);
+      if (extraDirs.length) runOpts.addDirs = extraDirs;
+    }
     if (images && images.length)
       runOpts.images = images.map(function (im) {
         return im.path;

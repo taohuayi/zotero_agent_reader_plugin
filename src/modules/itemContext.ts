@@ -10,12 +10,74 @@
  */
 import { instructionFiles } from "./backends";
 import { ensurePdfTextIndex, PAGE_HEADER_PREFIX } from "./pdfTextIndex";
+import { ensureLibrarySnapshot } from "./libraryContext";
+
+// Optional section appended when library access is enabled: the same paper chat,
+// but able to look across the whole library. `library` is what
+// ensureLibrarySnapshot returns, or null when the feature is off/unavailable.
+//
+// Deliberately does NOT introduce a cross-paper citation marker: chatPanel only
+// renders `[p.N "quote"]` for THIS paper (referenceResolver resolves it against
+// this PDF), so a `[@key p.N …]` form would render as dead text and could not be
+// verified. Other papers are referenced in prose until that UI exists.
+export function buildLibrarySection(library) {
+  if (!library || !library.files) return "";
+  var f = library.files;
+  var stats = library.stats || {};
+  return (
+    "\n## The rest of the library (read-only)\n\n" +
+    "This user's whole Zotero library is readable. Use it when the question\n" +
+    "reaches beyond this paper — related work, prior art, what they already\n" +
+    "read. Do NOT use it to answer questions about THIS paper.\n\n" +
+    "- `" +
+    f.catalog +
+    "`\n  tab-separated, " +
+    (stats.itemCount || 0) +
+    " items: key, year, type, title, creators, collection paths,\n" +
+    "  attachment keys.\n" +
+    "- `" +
+    f.collections +
+    "`\n  the collection tree (" +
+    (stats.collectionCount || 0) +
+    " nodes). A paper usually sits in several at once\n" +
+    "  (theme, reading date, project), so treat them as facets, not a taxonomy.\n" +
+    "- `" +
+    f.annotations +
+    "`\n  the user's OWN highlights (" +
+    (stats.annotationCount || 0) +
+    "). Their `p.N` is the physical page; a\n" +
+    "  trailing `(printed X)` is the number printed on the page — never cite that.\n" +
+    "- `" +
+    f.notes +
+    "`\n  the user's OWN notes (" +
+    (stats.noteCount || 0) +
+    ").\n\n" +
+    "Full text of every attachment is already extracted by Zotero at\n" +
+    "`" +
+    (library.storage || "") +
+    "/<attachmentKey>/.zotero-ft-cache`. Search it:\n\n" +
+    "```\n" +
+    "rg -i --hidden -l -g '.zotero-ft-cache' '<pattern>' " +
+    (library.storage || "") +
+    "\n" +
+    "```\n\n" +
+    "Both flags are mandatory: `--hidden` because the cache is a dot-file (rg\n" +
+    "matches nothing without it), and `-i` because case-sensitive search was\n" +
+    "measured to miss 14% of matching papers. A hit gives an attachment key —\n" +
+    "grep it in the catalog to learn which paper it is.\n\n" +
+    "That cache is ONE FLAT BLOB with no page markers: use it to FIND a paper,\n" +
+    "never to derive a page number. When referring to another paper, name it by\n" +
+    'title (and key) in prose — the clickable `[p.N "quote"]` citation form is\n' +
+    "reserved for THIS paper and would not resolve for any other.\n"
+  );
+}
 
 export function buildAgentInstructions(
   title,
   pdfPath,
   pageTextPath,
   pageCount,
+  library,
 ) {
   var source;
   var pageRule;
@@ -79,7 +141,8 @@ export function buildAgentInstructions(
     "- The quote is 12-25 words copied VERBATIM from ONE physical PDF page (no\n" +
     "  paraphrase/translation). Choose a distinctive passage that uniquely locates\n" +
     "  the claim on that page; it is shown in chat and clicked to highlight the text.\n" +
-    "- Cite the MAIN claims; you need NOT cite every sentence.\n"
+    "- Cite the MAIN claims; you need NOT cite every sentence.\n" +
+    buildLibrarySection(library)
   );
 }
 
@@ -120,8 +183,11 @@ function titleOf(item) {
   return "this paper";
 }
 
-// Returns { workdir, pdfPath, key, title } or throws with a user-facing message.
-export async function prepareWorkdir(item) {
+// Returns { workdir, pdfPath, key, title, … } or throws with a user-facing
+// message. opts.libraryAccess additionally exposes the whole library (see
+// buildLibrarySection); it is a pref because it widens what the agent — and
+// therefore the CLI's provider — can read from one paper to every paper.
+export async function prepareWorkdir(item, opts) {
   var att = await resolvePdfAttachment(item);
   if (!att) throw new Error("No PDF attachment found for this item.");
   var pdfPath = await att.getFilePathAsync();
@@ -146,11 +212,26 @@ export async function prepareWorkdir(item) {
       Zotero.debug("[PaperReadingAgent] PDF page index unavailable: " + e);
     } catch (e2) {}
   }
+  var library = null;
+  if (opts && opts.libraryAccess) {
+    try {
+      // the panel re-mounts on every item switch; rebuilding walks every item,
+      // so reuse a recent snapshot instead of paying for it each time
+      library = await ensureLibrarySnapshot({ maxAgeMs: 60000 });
+    } catch (e) {
+      // the paper chat must still work if the library snapshot fails
+      try {
+        Zotero.debug("[PaperReadingAgent] library snapshot unavailable: " + e);
+      } catch (e2) {}
+    }
+  }
+
   var agents = buildAgentInstructions(
     title,
     pdfPath,
     pageIndex && pageIndex.textPath,
     pageIndex && pageIndex.pageCount,
+    library,
   );
   // one instruction file per backend convention (AGENTS.md, CLAUDE.md), same content
   var files = instructionFiles();
@@ -166,5 +247,6 @@ export async function prepareWorkdir(item) {
     attachmentID: att.id,
     pageTextPath: pageIndex && pageIndex.textPath,
     pageCount: pageIndex && pageIndex.pageCount,
+    library: library,
   };
 }

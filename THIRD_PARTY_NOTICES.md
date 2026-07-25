@@ -4,9 +4,9 @@ This plugin bundles the following third-party libraries (the JS via esbuild; KaT
 
 | Library | Version | License | Bundled file(s) |
 |---|---|---|---|
-| [marked](https://github.com/markedjs/marked) | 12.0.2 | MIT | `content/vendor/marked.min.js` |
-| [KaTeX](https://github.com/KaTeX/KaTeX) | 0.16.11 | MIT | `content/vendor/katex.min.js, katex.min.css, fonts/*.woff2` |
-| [DOMPurify](https://github.com/cure53/DOMPurify) | 3.1.7 | Apache-2.0 OR MPL-2.0 | `content/vendor/purify.min.js` |
+| [marked](https://github.com/markedjs/marked) | 12.0.2 | MIT | bundled into `content/scripts/paper-reading-agent.js` |
+| [KaTeX](https://github.com/KaTeX/KaTeX) | 0.16.11 | MIT | bundled into `content/scripts/paper-reading-agent.js`; `content/vendor/katex.min.css`, `content/vendor/fonts/*.woff2` |
+| [DOMPurify](https://github.com/cure53/DOMPurify) | 3.1.7 | Apache-2.0 OR MPL-2.0 | bundled into `content/scripts/paper-reading-agent.js` |
 
 
 ---

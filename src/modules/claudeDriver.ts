@@ -51,7 +51,10 @@ function parentDir(p) {
 // In headless -p mode an out-of-policy tool is AUTO-DENIED (never hangs), so this
 // is safe without --dangerously-skip-permissions. Bash is scoped to pdftotext so
 // the agent cannot route a write through the shell.
-var RO_ALLOW = ["Bash(pdftotext:*)", "Read"];
+// `rg` is here so library access can search Zotero's full-text extraction cache;
+// like pdftotext it only reads, and Bash stays scoped to these two commands so
+// the agent cannot route a write through the shell.
+var RO_ALLOW = ["Bash(pdftotext:*)", "Bash(rg:*)", "Read"];
 var RO_WEB = ["WebSearch", "WebFetch"];
 var RO_DENY = ["Write", "Edit", "NotebookEdit"];
 
@@ -69,25 +72,34 @@ export function buildArgv(workdir, sessionId, prompt, opts) {
     "--permission-mode",
     opts.permissionMode || "default",
   ];
-  // grant read access to the workdir (CLAUDE.md) and the PDF's directory.
-  argv.push("--add-dir", workdir);
-  if (opts.addDir && opts.addDir !== workdir)
-    argv.push("--add-dir", opts.addDir);
-  // grant read access to each attached image's directory (deduped; skip ones already
-  // covered by workdir/addDir). claude has no image input flag — it "sees" an image
-  // by reading the file with its (multimodal) Read tool, so the dir must be allowed.
-  var imgDirs = [];
-  if (opts.images && opts.images.length) {
-    var covered = [workdir];
-    if (opts.addDir) covered.push(opts.addDir);
-    for (var di = 0; di < opts.images.length; di++) {
-      if (!opts.images[di]) continue;
-      var d = parentDir(opts.images[di]);
-      if (covered.indexOf(d) < 0 && imgDirs.indexOf(d) < 0) imgDirs.push(d);
+  // Every directory claude may read, deduped in one place: the workdir
+  // (CLAUDE.md), the PDF's directory, any library dirs (snapshot + Zotero
+  // storage), and one per attached image — claude has no image input flag, it
+  // "sees" an image by reading the file with its (multimodal) Read tool, so
+  // that directory must be allowed too.
+  // --add-dir grants a directory recursively, so keep only the outermost ones:
+  // skip a path an existing grant already covers, and drop existing grants that
+  // a newly added ancestor covers (the PDF's dir sits under Zotero's storage).
+  var dirs = [];
+  function allowDir(d) {
+    if (!d) return;
+    for (var i = 0; i < dirs.length; i++) {
+      if (d === dirs[i] || d.indexOf(dirs[i] + "/") === 0) return;
     }
-    for (var dj = 0; dj < imgDirs.length; dj++)
-      argv.push("--add-dir", imgDirs[dj]);
+    dirs = dirs.filter(function (g) {
+      return g.indexOf(d + "/") !== 0;
+    });
+    dirs.push(d);
   }
+  allowDir(workdir);
+  allowDir(opts.addDir);
+  (opts.addDirs || []).forEach(allowDir);
+  if (opts.images && opts.images.length) {
+    for (var di = 0; di < opts.images.length; di++) {
+      if (opts.images[di]) allowDir(parentDir(opts.images[di]));
+    }
+  }
+  for (var dj = 0; dj < dirs.length; dj++) argv.push("--add-dir", dirs[dj]);
   // --allowedTools is variadic; --disallowedTools (a flag) terminates the list.
   var allow = RO_ALLOW.slice();
   if (opts.webSearch !== false) allow = allow.concat(RO_WEB);

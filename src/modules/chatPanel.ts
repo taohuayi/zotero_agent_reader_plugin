@@ -16,6 +16,7 @@ import * as PRAUpdater from "./updater";
 import { resolveReferenceNearPage } from "./referenceResolver";
 import { backendStatusLabel, messageModelLabel } from "./modelInfo";
 import { preserveStreamingScroll, scrollToBottom } from "./streamingScroll";
+import { ensureLibrarySnapshot } from "./libraryContext";
 
 var SECTION_ID = null;
 var PLUGIN_ID = null;
@@ -42,6 +43,9 @@ function prefs() {
     // shared
     timeoutSec: parseInt(g("timeoutSec", 600), 10) || 600,
     webSearch: g("webSearch", true) !== false,
+    // off by default: it widens what the agent (and the CLI's provider) can
+    // read from one paper to every paper in the library
+    libraryAccess: g("libraryAccess", false) === true,
   };
 }
 
@@ -721,7 +725,9 @@ async function mount(body, item) {
 
   var ctx;
   try {
-    ctx = await PRAItemContext.prepareWorkdir(item);
+    ctx = await PRAItemContext.prepareWorkdir(item, {
+      libraryAccess: p.libraryAccess,
+    });
   } catch (e) {
     ui.status.textContent = "⚠ " + (e && e.message ? e.message : e);
     ui.input.disabled = true;
@@ -1010,6 +1016,14 @@ export async function installUpdate() {
   return await PRAUpdater.installPendingUpdate();
 }
 
+// Build the library-wide snapshot the resident agent reads (catalog, collection
+// tree, the user's annotations/notes, instructions). Nothing consumes it yet —
+// it is exposed so it can be run and inspected from the Run JavaScript console
+// before any UI is built on top.
+export async function buildLibrarySnapshot(force) {
+  return await ensureLibrarySnapshot({ force: !!force });
+}
+
 // reachable from Run JavaScript for debugging (unchanged handle from v0.1.0)
 try {
   Zotero.PaperReadingAgent = {
@@ -1020,5 +1034,6 @@ try {
     getBackendInfo: getBackendInfo,
     checkForUpdates: checkForUpdates,
     installUpdate: installUpdate,
+    buildLibrarySnapshot: buildLibrarySnapshot,
   };
 } catch (e) {}

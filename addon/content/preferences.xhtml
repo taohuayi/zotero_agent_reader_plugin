@@ -122,6 +122,18 @@
       <checkbox preference="webSearch" label="Enable web search" />
     </hbox>
     <hbox align="center">
+      <checkbox
+        preference="libraryAccess"
+        label="Let the agent read your whole library"
+      />
+    </hbox>
+    <description
+      style="margin: 0 0 5px 24px; color: var(--fill-secondary, #666)"
+      >Adds your catalogue, collections, annotations and notes, and lets the
+      agent search the full text of every attachment — so it can answer across
+      papers. More of your library is sent to the agent CLI.</description
+    >
+    <hbox align="center">
       <label value="Turn timeout (seconds)" style="min-width: 12em" />
       <html:input
         type="number"
