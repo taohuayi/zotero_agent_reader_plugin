@@ -92,7 +92,7 @@ var PRA_CSS = [
   ".pra-wide .pra-composer{position:sticky;bottom:0;z-index:6;box-shadow:0 -8px 22px var(--color-control,#fff);}",
   ".pra-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;padding:6px 0;background:var(--color-control,#fff);box-shadow:0 7px 12px -12px rgba(0,0,0,.45);}",
   // health banner → subtle pill with a status dot
-  ".pra-banner{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font-size:11px;padding:3px 10px;border-radius:999px;background:var(--fill-quinary,rgba(0,0,0,.05));color:var(--fill-secondary,#6b7280);max-width:100%;}",
+  ".pra-banner{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font-size:11px;padding:3px 10px;border-radius:999px;background:var(--fill-quinary,rgba(0,0,0,.035));max-width:100%;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
   ".pra-banner::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex:none;}",
   ".pra-banner.ok{color:var(--accent-green,#2a9d4a);}.pra-banner.err{color:var(--accent-red,#d23b3b);}",
   ".pra-popout{flex:none;height:28px;padding:0 10px;border:1px solid var(--accent-blue30,rgba(64,114,229,.35));border-radius:8px;background:var(--accent-blue10,rgba(64,114,229,.08));color:var(--accent-blue,#245fbd);cursor:pointer;font:650 11px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei UI',sans-serif;}",
@@ -118,11 +118,13 @@ var PRA_CSS = [
   // item-pane is a privileged XUL document whose default is -moz-user-select:none,
   // which content inherits; we must explicitly opt the message area back in (this
   // only changes selection behaviour, not layout/appearance).
-  ".pra-messages{display:flex;flex-direction:column;gap:0;width:100%;max-width:100%;min-width:0;overflow-x:hidden;overflow-y:auto;max-height:62vh;padding:4px 2px 18px;box-sizing:border-box;-moz-user-select:text;user-select:text;scrollbar-gutter:stable;}",
+  ".pra-messages{display:flex;flex-direction:column;gap:0;width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:auto;max-height:62vh;padding:4px 2px 18px;box-sizing:border-box;-moz-user-select:text;user-select:text;scrollbar-gutter:stable;}",
   ".pra-row{position:relative;display:flex;flex-direction:column;width:100%;max-width:100%;min-width:0;box-sizing:border-box;}.pra-row.user{justify-content:stretch;margin-top:22px;}.pra-row.assistant{justify-content:stretch;}",
   // Notebook layout: a question is a section heading and an answer is prose,
   // rather than two opposing chat bubbles.
   ".pra-bubble{word-break:break-word;box-sizing:border-box;}",
+  ".pra-messages pre,.pra-messages .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden;}",
+  ".pra-messages .katex{white-space:nowrap;}",
   ".pra-bubble.user{position:relative;width:100%;max-width:none;padding:13px 14px 12px 16px;border-radius:4px 13px 13px 4px;border-left:4px solid var(--accent-blue,#2563eb);background:var(--accent-blue10,rgba(64,114,229,.07));color:var(--fill-primary,#1d2129);white-space:pre-wrap;font-size:14.5px;font-weight:680;line-height:1.58;box-shadow:none;}",
   ".pra-bubble.user::before{content:'问题';display:block;margin-bottom:5px;color:var(--accent-blue,#2563eb);font-size:10px;font-weight:750;letter-spacing:.12em;}",
   ".pra-bubble.assistant{max-width:100%;width:100%;padding:17px 11px 25px 16px;border-left:1px solid var(--color-border,rgba(0,0,0,.11));white-space:pre-wrap;background:transparent;}",
