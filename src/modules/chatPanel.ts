@@ -90,8 +90,8 @@ var PRA_CSS = [
   ".pra-wide .pra-messages{max-height:none!important;overflow-y:visible!important;}",
   ".pra-wide .pra-thought-list{max-height:430px!important;}",
   ".pra-wide .pra-composer{position:sticky;bottom:0;z-index:6;box-shadow:0 -8px 22px var(--color-control,#fff);}",
-  ".pra-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;padding:6px 0;background:var(--color-control,#fff);box-shadow:0 7px 12px -12px rgba(0,0,0,.45);}"
-  ".pra-version{flex:1;font-size:9.5px;color:var(--fill-tertiary,#9aa0a8);letter-spacing:.04em;user-select:none;white-space:nowrap;}",,
+  ".pra-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;padding:6px 0;background:var(--color-control,#fff);box-shadow:0 7px 12px -12px rgba(0,0,0,.45);}",
+  ".pra-version{flex:1;font-size:9.5px;color:var(--fill-tertiary,#9aa0a8);letter-spacing:.04em;user-select:none;white-space:nowrap;}",
   // health banner → subtle pill with a status dot
   ".pra-banner{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font-size:11px;padding:3px 10px;border-radius:999px;background:var(--fill-quinary,rgba(0,0,0,.035));max-width:100%;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
   ".pra-banner::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex:none;}",
