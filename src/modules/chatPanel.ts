@@ -165,8 +165,8 @@ var PRA_CSS = [
   ".pra-map-node.dragging{opacity:.55;transform:scale(1.02);z-index:10;box-shadow:0 8px 22px rgba(0,0,0,.18);}",
   ".pra-map-node.drop-target{outline:2px dashed var(--accent-blue,#2563eb);outline-offset:2px;}",
   ".pra-map-node.renamed::after{content:'✏';position:absolute;right:4px;bottom:2px;font-size:8px;color:var(--fill-tertiary,#999);}",
-  ".pra-message-edit{border:none;background:transparent;color:var(--fill-tertiary,#888);font-size:10px;cursor:pointer;padding:2px 4px;opacity:0;transition:opacity .12s;}",
-  ".pra-row:hover .pra-message-edit{opacity:1;}.pra-message-edit:hover{color:var(--accent-blue,#2563eb);}",
+  ".pra-message-edit{border:none;background:transparent;color:var(--fill-tertiary,#888);font-size:10px;cursor:pointer;padding:2px 4px;opacity:.55;transition:opacity .12s;}",
+  ".pra-row:hover .pra-message-edit{opacity:1;}.pra-message-edit:hover{color:var(--accent-blue,#2563eb);opacity:1;}",
   ".pra-edit-area{width:100%;min-height:150px;box-sizing:border-box;border:1px solid var(--color-border,rgba(0,0,0,.22));border-radius:8px;padding:8px;font:12px/1.6 ui-monospace,Consolas,Menlo,monospace;background:var(--color-control,#fff);color:var(--fill-primary,#222);resize:vertical;}",
   ".pra-edit-bar{display:flex;gap:6px;margin-top:6px;}",
   ".pra-edit-note{font-size:10px;color:var(--fill-tertiary,#888);margin-top:4px;}",
@@ -2191,6 +2191,14 @@ async function mount(body, item) {
       "title",
       wide ? "退出宽屏阅读" : "展开完整思维导图与对话笔记",
     );
+    // Re-render so every element re-lays-out for the new container size
+    // (fixed full-width elements must not linger after leaving wide mode).
+    if (session && session.conv) {
+      try {
+        renderActiveMessages(session);
+        renderWorkflow(session);
+      } catch (e) {}
+    }
   });
   doc.addEventListener("keydown", function (event) {
     if (
@@ -2201,6 +2209,12 @@ async function mount(body, item) {
       ui.wrap.classList.remove("pra-wide");
       ui.popout.textContent = "宽屏阅读 ⛶";
       ui.popout.setAttribute("title", "展开完整思维导图与对话笔记");
+      if (session && session.conv) {
+        try {
+          renderActiveMessages(session);
+          renderWorkflow(session);
+        } catch (e) {}
+      }
     }
   });
 
@@ -2643,3 +2657,4 @@ try {
     buildLibrarySnapshot: buildLibrarySnapshot,
   };
 } catch (e) {}
+/usr/bin/bash: line 7: C:/Users/xu/AppData/Local/hermes/cache/terminal/hermes-cwd-2c83c94623ae.txt: Device or resource busy
