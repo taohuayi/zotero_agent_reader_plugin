@@ -116,7 +116,12 @@ export async function runTurn(
     lineId: turnOptions && turnOptions.lineId,
     thoughtId: turnOptions && turnOptions.thoughtId,
   };
-  var requestedModel = backend.id === "claude" ? opts.claudeModel : opts.model;
+  var requestedModel =
+    backend.id === "claude"
+      ? opts.claudeModel
+      : backend.id === "chatgpt"
+        ? opts.chatgptModel
+        : opts.model;
   if (requestedModel) assistant.requestedModel = requestedModel;
   conv.messages.push(userMsg);
   conv.messages.push(assistant);
@@ -155,6 +160,24 @@ export async function runTurn(
   }
 
   try {
+    // Stateless backends (chatgpt) keep NO server-side session: they need the
+    // whole thought-chain history replayed every turn. Stateful backends
+    // (codex app-server, claude --resume) hold it themselves and get null.
+    var history = null;
+    if (backend.caps && backend.caps.stateless) {
+      history = [];
+      // the two most recent messages are the userMsg and the empty assistant
+      // just pushed above — they ARE this turn, not history
+      for (var hi = 0; hi < conv.messages.length - 2; hi++) {
+        var hm = conv.messages[hi];
+        if (!hm) continue;
+        if (thoughtId && hm.thoughtId !== thoughtId) continue;
+        if (hm.role !== "user" && hm.role !== "assistant") continue;
+        var hc = String(hm.content || "");
+        if (!hc) continue;
+        history.push({ role: hm.role, content: hc });
+      }
+    }
     await backend.runTurn(
       runOpts,
       ctx.workdir,
@@ -206,6 +229,7 @@ export async function runTurn(
         }
       },
       liveRef,
+      history,
     );
   } catch (e) {
     terminalEvent = {

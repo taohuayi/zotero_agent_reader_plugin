@@ -184,8 +184,87 @@ export function claudeModelInfo(opts) {
   };
 }
 
+var CHATGPT_SUGGESTIONS = [
+  {
+    value: "gpt-5.6",
+    label: "gpt-5.6",
+    description: "Current ChatGPT flagship",
+  },
+  {
+    value: "gpt-5",
+    label: "gpt-5",
+    description: "ChatGPT flagship",
+  },
+  {
+    value: "gpt-4o",
+    label: "gpt-4o",
+    description: "Fast general-purpose",
+  },
+  {
+    value: "o3-mini",
+    label: "o3-mini",
+    description: "Reasoning, lightweight",
+  },
+  {
+    value: "gpt-4o-mini",
+    label: "gpt-4o-mini",
+    description: "Fastest, cheapest",
+  },
+];
+
+export function chatgptModelInfo(opts) {
+  opts = opts || {};
+  var selected = clean(opts.chatgptModel);
+  var lastRuntime = clean(opts.chatgptLastModel);
+  var effective = selected || lastRuntime || "gpt-5";
+  var source = selected
+    ? "plugin"
+    : lastRuntime
+      ? "last-runtime"
+      : "chatgpt-default";
+  var options = CHATGPT_SUGGESTIONS.map(function (o) {
+    return Object.assign({}, o);
+  });
+  if (
+    selected &&
+    !options.some(function (o) {
+      return o.value === selected;
+    })
+  ) {
+    options.unshift({
+      value: selected,
+      label: selected,
+      description: "Custom model",
+    });
+  }
+  return {
+    backend: "chatgpt",
+    selected: selected,
+    configured: "",
+    lastRuntime: lastRuntime,
+    effective: effective,
+    source: source,
+    sourceLabel:
+      source === "plugin"
+        ? "Paper Reading Agent setting"
+        : source === "last-runtime"
+          ? "last reported response"
+          : "ChatGPT default (gpt-5)",
+    resolved: !!effective,
+    options: options,
+    catalogAvailable: false,
+    note: "ChatGPT quota is used via the local OpenAI-compatible gateway (chat2api).",
+  };
+}
+
 function backendLabel(id) {
-  return id === "claude" ? "Claude Code" : id === "codex" ? "Codex" : clean(id);
+  return id === "claude"
+    ? "Claude Code"
+    : id === "codex"
+      ? "Codex"
+      : id === "chatgpt"
+        ? "ChatGPT"
+        : clean(id);
 }
 
 export function messageModelLabel(message) {

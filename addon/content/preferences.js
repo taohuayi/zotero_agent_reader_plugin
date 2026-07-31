@@ -21,8 +21,10 @@ var PaperReadingAgentPrefs = {
         "codex";
       var codex = document.getElementById("pra-codex-group");
       var claude = document.getElementById("pra-claude-group");
+      var chatgpt = document.getElementById("pra-chatgpt-group");
       if (codex) codex.hidden = backend !== "codex";
       if (claude) claude.hidden = backend !== "claude";
+      if (chatgpt) chatgpt.hidden = backend !== "chatgpt";
       // Zotero executes pane scripts before inserting the XHTML fragment. The
       // immediate init() therefore sees no controls; only mark/load the model
       // data once the deferred init can actually find the pane DOM.
@@ -91,7 +93,8 @@ var PaperReadingAgentPrefs = {
   },
 
   refreshModels: async function (backend) {
-    backend = backend === "claude" ? "claude" : "codex";
+    backend =
+      backend === "claude" ? "claude" : backend === "chatgpt" ? "chatgpt" : "codex";
     this._modelLoaded[backend] = true;
     var token = (this._modelRefreshToken[backend] || 0) + 1;
     this._modelRefreshToken[backend] = token;
@@ -128,8 +131,14 @@ var PaperReadingAgentPrefs = {
   },
 
   resetModel: function (backend) {
-    backend = backend === "claude" ? "claude" : "codex";
-    var pref = backend === "claude" ? "claudeModel" : "model";
+    backend =
+      backend === "claude" ? "claude" : backend === "chatgpt" ? "chatgpt" : "codex";
+    var pref =
+      backend === "claude"
+        ? "claudeModel"
+        : backend === "chatgpt"
+          ? "chatgptModel"
+          : "model";
     try {
       Zotero.Prefs.set(this.PREFIX + pref, "", true);
     } catch (e) {}
@@ -285,6 +294,7 @@ var PaperReadingAgentPrefs = {
       }
       self._wireModel("codex", "model");
       self._wireModel("claude", "claudeModel");
+      self._wireModel("chatgpt", "chatgptModel");
       var testBtn = document.getElementById("pra-test");
       if (testBtn && !testBtn._praWired) {
         testBtn.addEventListener("command", function () {

@@ -16,6 +16,10 @@ declare namespace _ZoteroTypes {
       "claudeModel": string;
       "claudeLastModel": string;
       "permissionMode": string;
+      "chatgptEndpoint": string;
+      "chatgptToken": string;
+      "chatgptModel": string;
+      "chatgptLastModel": string;
       "webSearch": boolean;
       "timeoutSec": number;
       "libraryAccess": boolean;

@@ -12,6 +12,11 @@ pref("claudePath", ""); // absolute path to the claude binary (else search PATH)
 pref("claudeModel", ""); // claude: sonnet | haiku | opus | … (else claude default)
 pref("claudeLastModel", ""); // last model actually reported by Claude Code
 pref("permissionMode", "default"); // claude permission mode (default = read-only allowlist)
+// chatgpt backend: OpenAI-compatible gateway (chat2api) that uses ChatGPT quota.
+pref("chatgptEndpoint", ""); // base URL (default http://127.0.0.1:5005/v1)
+pref("chatgptToken", ""); // access token; empty = read ~/.codex/chat2api/data/token.txt
+pref("chatgptModel", ""); // gpt-5.6 | gpt-5 | gpt-4o | o3-mini | … (default gpt-5)
+pref("chatgptLastModel", ""); // last model actually reported by the gateway
 pref("webSearch", true);
 pref("timeoutSec", 600);
 // Off by default: it lets the agent read the WHOLE library (catalog, your

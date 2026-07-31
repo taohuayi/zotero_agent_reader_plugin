@@ -19,6 +19,7 @@
 import * as appServer from "./appServer";
 import * as codexDriver from "./codexDriver";
 import * as claudeDriver from "./claudeDriver";
+import * as chatgptDriver from "./chatgptDriver";
 
 var CODEX = {
   id: "codex",
@@ -43,6 +44,7 @@ var CLAUDE = {
   loginHint: "run `claude /login` or set the claude path",
   caps: {
     persistent: false,
+    stateless: false,
     reasoningEffort: false,
     webSearch: true,
     modelCatalog: false,
@@ -54,9 +56,27 @@ var CLAUDE = {
   shutdown: claudeDriver.shutdown,
 };
 
+var CHATGPT = {
+  id: "chatgpt",
+  label: "ChatGPT",
+  loginHint: "start chat2api and refresh its token, or set chatgptToken",
+  caps: {
+    persistent: false,
+    stateless: true, // no server-side session: chatService sends full history
+    reasoningEffort: false,
+    webSearch: false,
+    modelCatalog: false,
+  },
+  instructionFiles: ["AGENTS.md"], // read as the system prompt by the driver
+  runTurn: chatgptDriver.runTurn, // one HTTP POST per turn (OpenAI-compatible)
+  healthcheck: chatgptDriver.healthcheck,
+  getModelInfo: chatgptDriver.getModelInfo,
+  shutdown: chatgptDriver.shutdown,
+};
+
 var DEFAULT_ID = "codex";
 var REGISTRY = Object.create(null);
-[CODEX, CLAUDE].forEach(function (b) {
+[CODEX, CLAUDE, CHATGPT].forEach(function (b) {
   REGISTRY[b.id] = b;
 });
 

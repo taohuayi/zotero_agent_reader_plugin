@@ -25,6 +25,7 @@
         <menupopup>
           <menuitem value="codex" label="Codex" />
           <menuitem value="claude" label="Claude Code" />
+          <menuitem value="chatgpt" label="ChatGPT (chat2api)" />
         </menupopup>
       </menulist>
     </hbox>
@@ -114,6 +115,51 @@
         </menupopup>
       </menulist>
     </hbox>
+  </groupbox>
+
+  <groupbox id="pra-chatgpt-group">
+    <label><html:h2>ChatGPT (chat2api)</html:h2></label>
+    <description style="margin: 0 0 6px">
+      Uses ChatGPT quota through a local OpenAI-compatible gateway (chat2api).
+      No Codex quota is consumed.
+    </description>
+    <hbox align="center">
+      <label value="Endpoint" style="min-width: 12em" />
+      <html:input
+        type="text"
+        preference="chatgptEndpoint"
+        placeholder="http://127.0.0.1:5005/v1"
+        style="flex: 1"
+      />
+    </hbox>
+    <hbox align="center">
+      <label value="Token" style="min-width: 12em" />
+      <html:input
+        type="password"
+        preference="chatgptToken"
+        placeholder="empty = use chat2api token file"
+        style="flex: 1"
+      />
+    </hbox>
+    <hbox align="center">
+      <label value="Model" style="min-width: 12em" />
+      <html:input
+        id="pra-chatgpt-model"
+        type="text"
+        preference="chatgptModel"
+        list="pra-chatgpt-models"
+        placeholder="gpt-5"
+        style="flex: 1"
+      />
+      <button id="pra-chatgpt-model-default" label="Use default" />
+      <button id="pra-chatgpt-model-refresh" label="Refresh" />
+    </hbox>
+    <html:datalist id="pra-chatgpt-models"></html:datalist>
+    <description
+      id="pra-chatgpt-model-status"
+      style="margin: 2px 0 5px 12em; color: var(--fill-secondary, #666)"
+      >Loading model information…</description
+    >
   </groupbox>
 
   <groupbox>

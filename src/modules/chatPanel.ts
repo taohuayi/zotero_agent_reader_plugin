@@ -59,6 +59,11 @@ function prefs() {
     claudeModel: g("claudeModel", "") || undefined, // e.g. sonnet | haiku (default: claude's default)
     claudeLastModel: g("claudeLastModel", "") || undefined,
     permissionMode: g("permissionMode", "") || undefined, // default (read-only allowlist applied in the driver)
+    // chatgpt-specific (stateless OpenAI-compatible gateway, e.g. chat2api)
+    chatgptEndpoint: g("chatgptEndpoint", "") || undefined, // base URL, default http://127.0.0.1:5005/v1
+    chatgptToken: g("chatgptToken", "") || undefined, // access token; empty = read the chat2api token file
+    chatgptModel: g("chatgptModel", "") || undefined, // gpt-5.6 | gpt-5 | gpt-4o | o3-mini | ...
+    chatgptLastModel: g("chatgptLastModel", "") || undefined,
     // shared
     timeoutSec: parseInt(g("timeoutSec", 600), 10) || 600,
     webSearch: g("webSearch", true) !== false,
