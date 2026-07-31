@@ -1778,7 +1778,7 @@ function buildSkeleton(doc, body) {
   banner.className = "pra-banner";
   var topbar = el(doc, "div");
   topbar.className = "pra-topbar";
-  var ver = el(doc, "span", null, "v" + "__buildVersion__");
+  var ver = el(doc, "span", null, "v0.13.14"); // keep in sync with package.json
   ver.className = "pra-version";
   topbar.appendChild(ver);
   var popout = el(doc, "button", null, "宽屏阅读 ⛶");
