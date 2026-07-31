@@ -2654,5 +2654,3 @@ try {
     buildLibrarySnapshot: buildLibrarySnapshot,
   };
 } catch (e) {}
-/usr/bin/bash: line 7: C:/Users/xu/AppData/Local/hermes/cache/terminal/hermes-cwd-2c83c94623ae.txt: Device or resource busy
-/usr/bin/bash: line 7: C:/Users/xu/AppData/Local/hermes/cache/terminal/hermes-cwd-2c83c94623ae.txt: Device or resource busy
