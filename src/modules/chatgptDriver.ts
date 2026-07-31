@@ -63,9 +63,6 @@ export function mapSSE(obj) {
     }
     if (c.finish_reason) out.push({ kind: "done" });
   }
-  if (!out.length && obj.choices && obj.choices[0]) {
-    out.push({ kind: "done" });
-  }
   return out;
 }
 

@@ -65,6 +65,15 @@ test("mapSSE: non-streaming completion", () => {
   ]);
 });
 
+test("mapSSE: role-only chunk (empty content) must NOT emit done", () => {
+  // The first streaming chunk often carries only {"delta":{"role":"assistant"}}.
+  // Emitting done here would make runTurn break before any text arrives.
+  const evs = mod.mapSSE({
+    choices: [{ delta: { role: "assistant", content: "" }, finish_reason: null }],
+  });
+  assert.deepEqual(evs, []);
+});
+
 test("mapSSE: error envelope maps to friendly error", () => {
   const evs = mod.mapSSE({ error: { message: "rate limit exceeded" } });
   assert.equal(evs.length, 1);
