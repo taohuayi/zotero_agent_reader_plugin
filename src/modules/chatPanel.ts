@@ -170,6 +170,7 @@ var PRA_CSS = [
   ".pra-edit-area{width:100%;min-height:150px;box-sizing:border-box;border:1px solid var(--color-border,rgba(0,0,0,.22));border-radius:8px;padding:8px;font:12px/1.6 ui-monospace,Consolas,Menlo,monospace;background:var(--color-control,#fff);color:var(--fill-primary,#222);resize:vertical;}",
   ".pra-edit-bar{display:flex;gap:6px;margin-top:6px;}",
   ".pra-edit-note{font-size:10px;color:var(--fill-tertiary,#888);margin-top:4px;}",
+  ".pra-empty-hint{padding:18px 12px;text-align:center;color:var(--fill-tertiary,#888);font-size:11.5px;border:1px dashed var(--color-border,rgba(0,0,0,.15));border-radius:10px;margin:8px 0;}",
   ".pra-breadcrumb{font-size:10.5px;color:var(--fill-secondary,#666);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
   ".pra-message-branch{align-self:center;opacity:0;border:none;background:transparent;color:var(--fill-tertiary,#888);font-size:10px;cursor:pointer;padding:2px 4px;transition:opacity .12s;}",
   ".pra-row:hover .pra-message-branch{opacity:1;}.pra-message-branch:hover{color:var(--accent-blue,#2563eb);}",
@@ -889,6 +890,7 @@ function renderWorkflow(session) {
     // ── drag to reparent: onto a node → its child; onto empty canvas → root ──
     var draggingThreadId = thread.id;
     var drag = null;
+    var suppressClick = false; // set after a real drag ends, cleared on next click
     node.addEventListener("pointerdown", function (e) {
       if (isBusy(session)) return;
       if (e.button !== 0) return;
@@ -932,39 +934,48 @@ function renderWorkflow(session) {
         canvas.querySelectorAll(".pra-map-node.drop-target").forEach(function (n) {
           n.classList.remove("drop-target");
         });
-        if (wasDrag) {
-          var target = dropTargetAt(ev.clientX, ev.clientY);
-          var targetId = target ? target.dataset.threadId : null;
-          if (targetId && targetId !== thread.id) {
-            if (PRAReading.isDescendant(session.conv, thread.id, targetId)) return;
-            if (PRAReading.reparentThread(session.conv, thread.id, targetId)) {
-              saveWorkflow(session);
-              renderWorkflow(session);
-            }
-          } else if (!targetId && thread.parentId) {
-            // dropped on empty canvas → promote to a root node
-            if (PRAReading.reparentThread(session.conv, thread.id, null)) {
-              saveWorkflow(session);
-              renderWorkflow(session);
-            }
+        if (!wasDrag) return; // plain clicks are handled by the click listener
+        suppressClick = true;
+        var target = dropTargetAt(ev.clientX, ev.clientY);
+        var targetId = target ? target.dataset.threadId : null;
+        if (targetId && targetId !== thread.id) {
+          if (PRAReading.isDescendant(session.conv, thread.id, targetId)) return;
+          if (PRAReading.reparentThread(session.conv, thread.id, targetId)) {
+            saveWorkflow(session);
+            renderWorkflow(session);
           }
-          return;
+        } else if (!targetId && thread.parentId) {
+          // dropped on empty canvas → promote to a root node
+          if (PRAReading.reparentThread(session.conv, thread.id, null)) {
+            saveWorkflow(session);
+            renderWorkflow(session);
+          }
         }
-        // plain click: switch to this thread
-        if (thread.id === state.activeId) return;
-        PRAReading.switchThread(session.conv, thread.id);
-        session.branchNext = false;
-        saveWorkflow(session);
-        renderActiveMessages(session);
-        renderWorkflow(session);
-        ui.input.placeholder = "继续这条思路…";
-        ui.input.focus();
       };
       if (typeof document.addEventListener === "function") {
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);
       }
-      e.preventDefault();
+      // NOTE: deliberately no preventDefault() here — Firefox needs the
+      // synthetic click to fire so node switching stays reliable. The click
+      // handler below ignores clicks that ended a drag.
+    });
+    node.addEventListener("click", function (e) {
+      if (suppressClick) {
+        suppressClick = false; // the click that concludes a drag
+        return;
+      }
+      drag = null;
+      if (isBusy(session)) return;
+      if (e.target.closest(".pra-map-act")) return;
+      if (thread.id === state.activeId) return;
+      PRAReading.switchThread(session.conv, thread.id);
+      session.branchNext = false;
+      saveWorkflow(session);
+      renderActiveMessages(session);
+      renderWorkflow(session);
+      ui.input.placeholder = "继续这条思路…";
+      ui.input.focus();
     });
     node.setAttribute("data-thread-id", thread.id);
     canvas.appendChild(node);
@@ -1374,6 +1385,7 @@ function renderActiveMessages(session, options) {
 
   var lastBubble = null;
   var lastContextLine = null;
+  var hasRenderedMessage = false;
   PRANotebook.messagesForView(session.conv, mode).forEach(function (message) {
     try {
       var lineId = messageLineId(message);
@@ -1493,12 +1505,24 @@ function renderActiveMessages(session, options) {
           },
         },
       );
+      hasRenderedMessage = true;
     } catch (e) {
       try {
         Zotero.debug("[PaperReadingAgent] renderMessage failed: " + e);
       } catch (e2) {}
     }
   });
+
+  if (!hasRenderedMessage) {
+    var emptyHint = el(
+      v.doc,
+      "div",
+      null,
+      "这个节点还没有对话——在下方输入框提问，回答会归入这个节点。",
+    );
+    emptyHint.className = "pra-empty-hint";
+    v.ui.messages.appendChild(emptyHint);
+  }
 
   if (typeof options.targetMessageIndex === "number") {
     scrollToRenderedMessage(session, options.targetMessageIndex);
