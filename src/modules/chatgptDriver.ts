@@ -162,17 +162,20 @@ export async function runTurn(opts, workdir, _sessionId, prompt, onEvent, liveRe
     messages: messages,
     stream: true,
   };
-  var controller = new AbortController();
+  // Zotero's script sandbox does not expose AbortController on all builds —
+  // degrade gracefully (timeout still fires via the timer + body cancel).
+  var controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
   if (liveRef)
     liveRef.kill = function () {
       try {
-        controller.abort();
+        if (controller) controller.abort();
       } catch (e) {}
     };
   var timeoutMs = (opts.timeoutSec || 600) * 1000;
   var timer = setTimeout(function () {
     try {
-      controller.abort();
+      if (controller) controller.abort();
     } catch (e) {}
     finish({ kind: "error", message: "ChatGPT request timed out after " + timeoutMs / 1000 + "s" });
   }, timeoutMs);
@@ -195,7 +198,7 @@ export async function runTurn(opts, workdir, _sessionId, prompt, onEvent, liveRe
         Authorization: "Bearer " + token,
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: controller ? controller.signal : undefined,
     });
     if (!resp.ok) {
       var errText = "";
@@ -270,10 +273,11 @@ export async function healthcheck(opts) {
     var endpoint = endpointOf(opts);
     var token = await tokenOf(opts);
     if (!token) return { ok: false, error: "ChatGPT token not found" };
-    var controller = new AbortController();
+    var controller =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = setTimeout(function () {
       try {
-        controller.abort();
+        if (controller) controller.abort();
       } catch (e) {}
     }, 8000);
     try {
@@ -289,7 +293,7 @@ export async function healthcheck(opts) {
           max_tokens: 1,
           stream: false,
         }),
-        signal: controller.signal,
+        signal: controller ? controller.signal : undefined,
       });
       if (!resp.ok) {
         var errText = "";
