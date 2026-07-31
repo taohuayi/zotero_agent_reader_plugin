@@ -2185,7 +2185,13 @@ async function mount(body, item) {
     ui.exportJSON.disabled = true;
     return;
   }
+  // debounce rapid clicks: each toggle re-lays-out the panel, so a double
+  // click used to bounce wide↔narrow and leave a random final state
+  var lastWideToggle = 0;
   ui.popout.addEventListener("click", function () {
+    var now = Date.now();
+    if (now - lastWideToggle < 400) return;
+    lastWideToggle = now;
     var wide = !ui.wrap.classList.contains("pra-wide");
     ui.wrap.classList.toggle("pra-wide", wide);
     ui.popout.textContent = wide ? "退出宽屏 ×" : "宽屏阅读 ⛶";
@@ -2193,14 +2199,9 @@ async function mount(body, item) {
       "title",
       wide ? "退出宽屏阅读" : "展开完整思维导图与对话笔记",
     );
-    // Re-render so every element re-lays-out for the new container size
-    // (fixed full-width elements must not linger after leaving wide mode).
-    if (session && session.conv) {
-      try {
-        renderActiveMessages(session);
-        renderWorkflow(session);
-      } catch (e) {}
-    }
+    // NO full re-render here: the content is unchanged, the container size
+    // is pure CSS, so re-rendering only caused lag that looked like missed
+    // clicks (and users clicked again → wide↔narrow bouncing).
   });
   doc.addEventListener("keydown", function (event) {
     if (
@@ -2211,12 +2212,6 @@ async function mount(body, item) {
       ui.wrap.classList.remove("pra-wide");
       ui.popout.textContent = "宽屏阅读 ⛶";
       ui.popout.setAttribute("title", "展开完整思维导图与对话笔记");
-      if (session && session.conv) {
-        try {
-          renderActiveMessages(session);
-          renderWorkflow(session);
-        } catch (e) {}
-      }
     }
   });
 
@@ -2659,3 +2654,5 @@ try {
     buildLibrarySnapshot: buildLibrarySnapshot,
   };
 } catch (e) {}
+/usr/bin/bash: line 7: C:/Users/xu/AppData/Local/hermes/cache/terminal/hermes-cwd-2c83c94623ae.txt: Device or resource busy
+/usr/bin/bash: line 7: C:/Users/xu/AppData/Local/hermes/cache/terminal/hermes-cwd-2c83c94623ae.txt: Device or resource busy
