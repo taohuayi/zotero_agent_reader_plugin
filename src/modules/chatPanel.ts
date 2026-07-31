@@ -118,15 +118,14 @@ var PRA_CSS = [
   // item-pane is a privileged XUL document whose default is -moz-user-select:none,
   // which content inherits; we must explicitly opt the message area back in (this
   // only changes selection behaviour, not layout/appearance).
-  ".pra-messages{display:flex;flex-direction:column;gap:0;width:100%;max-width:100%;min-width:0;overflow-x:hidden;overflow-y:auto;max-height:62vh;padding:4px 2px 18px;box-sizing:border-box;-moz-user-select:text;user-select:text;scrollbar-gutter:stable;}",
+  ".pra-messages{display:flex;flex-direction:column;gap:0;width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:auto;max-height:62vh;padding:4px 2px 18px;box-sizing:border-box;-moz-user-select:text;user-select:text;scrollbar-gutter:stable;}",
   ".pra-row{position:relative;display:flex;flex-direction:column;width:100%;max-width:100%;min-width:0;box-sizing:border-box;}.pra-row.user{justify-content:stretch;margin-top:22px;}.pra-row.assistant{justify-content:stretch;}",
   // Notebook layout: a question is a section heading and an answer is prose,
   // rather than two opposing chat bubbles.
   ".pra-bubble{word-break:break-word;box-sizing:border-box;}",
   ".pra-messages pre,.pra-messages .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden;}",
   ".pra-messages .katex{white-space:nowrap;display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden;vertical-align:middle;scrollbar-width:thin;}",
-  ".pra-messages .katex-display{margin:6px 0;padding:2px 0;}",
-  ".pra-messages .katex-display>.katex{display:block;}",
+  ".pra-messages .katex-display{margin:6px 0;padding:2px 0;max-width:100%;overflow-x:auto;overflow-y:hidden;}",
   ".pra-messages img{max-width:100%;height:auto;}",
   ".pra-messages table{display:block;max-width:100%;overflow-x:auto;}",
   ".pra-messages pre{max-width:100%;}",
@@ -260,7 +259,11 @@ function injectStyles(doc, wrap) {
     if (ROOT_URI) {
       var link = doc.createElement("link");
       link.rel = "stylesheet";
-      link.href = ROOT_URI + "content/vendor/katex.min.css";
+      // chrome:// beats jar: here — the KaTeX stylesheet references its fonts
+      // via relative urls (fonts/KaTeX_*.woff2); under a jar: root those
+      // font loads fail in Zotero and every formula renders as an empty box.
+      // The chrome package is registered in bootstrap.js (__addonRef__).
+      link.href = "chrome://paper-reading-agent/content/vendor/katex.min.css";
       wrap.appendChild(link);
     }
     var style = doc.createElement("style");
