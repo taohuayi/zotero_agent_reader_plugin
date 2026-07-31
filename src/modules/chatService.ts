@@ -12,10 +12,51 @@
 import * as PRAStore from "./store";
 import { getBackend } from "./backends";
 import { loadPdfTextIndexPages } from "./pdfTextIndex";
+import { responseInstruction } from "./readingWorkflow";
 import { verifyAndCorrectCitationPages } from "./referenceResolver";
 
-export function buildBackendPrompt(content, ctx) {
+function persistenceError(stage, error) {
+  return (
+    "保存失败（" +
+    stage +
+    "）： " +
+    String(error && error.message ? error.message : error)
+  );
+}
+
+async function requiredSave(conv, ui, stage) {
+  try {
+    await PRAStore.save(conv);
+  } catch (e) {
+    var message = persistenceError(stage, e);
+    if (ui && ui.onError) ui.onError(message);
+    else if (ui && ui.onStatus) ui.onStatus(message);
+    throw e;
+  }
+}
+
+function bestEffortSave(conv, ui, stage) {
+  try {
+    Promise.resolve(PRAStore.save(conv)).catch(function (e) {
+      if (ui && ui.onStatus) ui.onStatus(persistenceError(stage, e));
+    });
+  } catch (e) {
+    if (ui && ui.onStatus) ui.onStatus(persistenceError(stage, e));
+  }
+}
+
+export function buildBackendPrompt(content, ctx, turnOptions) {
   var prompt = String(content == null ? "" : content);
+  if (turnOptions && turnOptions.readingMode) {
+    prompt +=
+      "\n\n---\n" +
+      responseInstruction(turnOptions.readingMode, !!turnOptions.followup);
+  }
+  if (turnOptions && turnOptions.branchContext) {
+    prompt +=
+      "\n\n[Thought-tree ancestry for orientation; stay inside the active branch]\n" +
+      turnOptions.branchContext;
+  }
   if (!ctx || !ctx.pageTextPath) return prompt;
   return (
     prompt +
@@ -46,25 +87,51 @@ export function applyCitationVerification(assistant, ctx) {
   return result;
 }
 
-export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
+export async function runTurn(
+  opts,
+  ctx,
+  conv,
+  content,
+  images,
+  ui,
+  liveRef,
+  turnOptions,
+) {
   // images: [{ path, thumb }] — path is the on-disk file (sent to the backend),
   // thumb is a small data URL kept only for re-rendering the bubble after reload.
   var backend = getBackend(opts.backend);
   var userMsg = { role: "user", content: content };
   if (images && images.length) userMsg.images = images;
-  var assistant = { role: "assistant", content: "", backend: backend.id };
+  if (turnOptions && turnOptions.readingMode)
+    userMsg.readingMode = turnOptions.readingMode;
+  if (turnOptions && turnOptions.questionId)
+    userMsg.questionId = turnOptions.questionId;
+  if (turnOptions && turnOptions.lineId) userMsg.lineId = turnOptions.lineId;
+  if (turnOptions && turnOptions.thoughtId)
+    userMsg.thoughtId = turnOptions.thoughtId;
+  var assistant = {
+    role: "assistant",
+    content: "",
+    backend: backend.id,
+    lineId: turnOptions && turnOptions.lineId,
+    thoughtId: turnOptions && turnOptions.thoughtId,
+  };
   var requestedModel = backend.id === "claude" ? opts.claudeModel : opts.model;
   if (requestedModel) assistant.requestedModel = requestedModel;
   conv.messages.push(userMsg);
   conv.messages.push(assistant);
-  await PRAStore.save(conv);
+  // Do not contact the backend if this conversation is read-only because a
+  // damaged primary and backup failed to load, or if the initial durable save
+  // otherwise fails.
+  await requiredSave(conv, ui, "发送前");
   if (ui.onUser) ui.onUser(userMsg);
   if (ui.onAssistantStart) ui.onAssistantStart(assistant);
 
   var terminalEvent = null;
 
-  var handle = PRAStore.getSessionHandle(conv, backend.id);
-  var backendPrompt = buildBackendPrompt(content, ctx);
+  var thoughtId = turnOptions && turnOptions.thoughtId;
+  var handle = PRAStore.getSessionHandle(conv, backend.id, thoughtId);
+  var backendPrompt = buildBackendPrompt(content, ctx, turnOptions);
   // let the backend read files outside the workdir (the PDF lives in Zotero's
   // storage tree); codex ignores opts.addDir, claude maps it to --add-dir.
   var runOpts;
@@ -97,9 +164,9 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
         if (ev.kind === "thread_started") {
           if (
             ev.sessionId &&
-            PRAStore.setSessionHandle(conv, backend.id, ev.sessionId)
+            PRAStore.setSessionHandle(conv, backend.id, ev.sessionId, thoughtId)
           ) {
-            PRAStore.save(conv);
+            bestEffortSave(conv, ui, "记录会话");
           }
         } else if (ev.kind === "runtime_info") {
           var before = [
@@ -123,7 +190,7 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
           if (before !== after) {
             // Best-effort intermediate persistence: the final save below remains
             // authoritative, but this preserves metadata if Zotero closes mid-turn.
-            PRAStore.save(conv);
+            bestEffortSave(conv, ui, "记录模型信息");
             if (ui.onRuntimeInfo) ui.onRuntimeInfo(assistant, ev);
           }
         } else if (ev.kind === "delta") {
@@ -179,7 +246,7 @@ export async function runTurn(opts, ctx, conv, content, images, ui, liveRef) {
     } catch (e2) {}
   }
 
-  await PRAStore.save(conv);
+  await requiredSave(conv, ui, "完成回答");
   if (terminalEvent.kind === "error") {
     if (ui.onError) ui.onError(terminalEvent.message);
   } else if (ui.onDone) {

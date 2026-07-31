@@ -128,8 +128,11 @@ export function buildAgentInstructions(
     pdfPath +
     "\n\n" +
     source +
-    "\nAnswer questions about THIS paper. Be concise and precise; refer to section\n" +
-    "or equation names when relevant. You may use web search for related work,\n" +
+    "\nAnswer questions about THIS paper. Be precise and refer to section or equation\n" +
+    "names when relevant. The panel supports a continuous line of inquiry: retain\n" +
+    "the reasoning context across follow-up questions instead of treating each turn\n" +
+    "as an isolated answer.\n" +
+    "You may use web search for related work,\n" +
     "definitions, or cited papers. Do not modify any files.\n\n" +
     "## Read efficiently (avoid being slow)\n\n" +
     "Read the whole indexed paper in one pass when practical. Do NOT repeatedly\n" +

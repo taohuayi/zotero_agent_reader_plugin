@@ -58,7 +58,7 @@ async function onStartup() {
     Zotero.PreferencePanes.register({
       pluginID: config.addonID,
       src: rootURI + "content/preferences.xhtml",
-      label: "Paper Reading Agent",
+      label: "Paper Reading Flow",
       image: rootURI + "content/icons/favicon.png",
       scripts: [rootURI + "content/preferences.js"],
     });

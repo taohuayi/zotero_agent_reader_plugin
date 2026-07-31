@@ -7,13 +7,7 @@ export default defineConfig({
   name: pkg.config.addonName,
   id: pkg.config.addonID,
   namespace: pkg.config.addonRef,
-  // Kept identical to the shipped 0.1.0 manifest so already-installed users keep
-  // polling the same updates.json. (Single fixed channel — no beta split.)
-  updateURL:
-    "https://raw.githubusercontent.com/xiaoxuanli-a/zotero_agent_reader_plugin/main/updates.json",
-  xpiDownloadLink:
-    "https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{xpiName}}.xpi",
-
+  updateURL: "https://example.invalid/paper-reading-flow/update.json",
   build: {
     assets: ["addon/**/*.*"],
     define: {

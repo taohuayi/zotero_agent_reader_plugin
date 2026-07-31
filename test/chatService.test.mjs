@@ -29,10 +29,20 @@ const bundle = await build({
           loader: "js",
           contents: `
               export async function save(conv) {
+                globalThis.__praSaveCount += 1;
+                if (globalThis.__praSaveFailureAt === globalThis.__praSaveCount) {
+                  throw new Error("simulated disk failure");
+                }
                 globalThis.__praSaves.push(JSON.parse(JSON.stringify(conv)));
               }
-              export function getSessionHandle() { return null; }
-              export function setSessionHandle() { return false; }
+              export function getSessionHandle(_conv, backend, thoughtId) {
+                globalThis.__praHandleReads.push({ backend, thoughtId });
+                return globalThis.__praResumeHandle || null;
+              }
+              export function setSessionHandle(_conv, backend, id, thoughtId) {
+                globalThis.__praHandleWrites.push({ backend, id, thoughtId });
+                return true;
+              }
             `,
         }));
         buildApi.onLoad(
@@ -76,6 +86,17 @@ test("backend reminder is added without changing the stored user text", () => {
   assert.match(prompt, /never count form-feeds/);
 });
 
+test("continuous dialogue contract is appended to the backend prompt only", () => {
+  const prompt = chatService.buildBackendPrompt(
+    "what does this mean?",
+    {},
+    { readingMode: "deep", followup: true },
+  );
+  assert.match(prompt, /^what does this mean\?/);
+  assert.match(prompt, /CONTINUOUS DEEP DIALOGUE/);
+  assert.match(prompt, /Continue from this branch/);
+});
+
 function scenario(terminalEvent, runtimeInfo) {
   const quote =
     "the proposed estimator consistently recovers the correct graph from observational samples";
@@ -87,7 +108,12 @@ function scenario(terminalEvent, runtimeInfo) {
   const prompts = [];
   const runtimeUpdates = [];
   globalThis.__praSaves = [];
+  globalThis.__praSaveCount = 0;
+  globalThis.__praSaveFailureAt = 0;
   globalThis.__praLoadCalls = [];
+  globalThis.__praHandleReads = [];
+  globalThis.__praHandleWrites = [];
+  globalThis.__praResumeHandle = null;
   globalThis.__praLoadedPages = pages;
   globalThis.__praBackend = {
     id: "codex",
@@ -220,4 +246,140 @@ test("persists requested backend and actual runtime model on the response", asyn
   assert.equal(response.modelSource, "thread-settings");
   assert.equal(s.runtimeUpdates.length, 1);
   assert.equal(globalThis.__praSaves.at(-1).messages[1].model, "gpt-5.6-codex");
+});
+
+test("visible line ids stay distinct while the backend resumes by thought id", async () => {
+  const s = scenario({ kind: "done" });
+  globalThis.__praResumeHandle = "resume-root-thought";
+  let receivedHandle = null;
+  globalThis.__praBackend = {
+    id: "codex",
+    async runTurn(_opts, _workdir, handle, _prompt, onEvent) {
+      receivedHandle = handle;
+      onEvent({ kind: "thread_started", sessionId: "continued-session" });
+      onEvent({ kind: "delta", text: "continued answer" });
+      onEvent({ kind: "done" });
+      return { exitCode: 0 };
+    },
+  };
+
+  await chatService.runTurn(
+    { backend: "codex" },
+    { workdir: "/work" },
+    s.conv,
+    "follow-up question",
+    null,
+    s.ui,
+    {},
+    {
+      readingMode: "deep",
+      questionId: "q2",
+      lineId: "q2",
+      thoughtId: "q1",
+      followup: true,
+    },
+  );
+
+  assert.equal(receivedHandle, "resume-root-thought");
+  assert.deepEqual(globalThis.__praHandleReads, [
+    { backend: "codex", thoughtId: "q1" },
+  ]);
+  assert.deepEqual(globalThis.__praHandleWrites, [
+    {
+      backend: "codex",
+      id: "continued-session",
+      thoughtId: "q1",
+    },
+  ]);
+  assert.deepEqual(
+    s.conv.messages.map((message) => [message.lineId, message.thoughtId]),
+    [
+      ["q2", "q1"],
+      ["q2", "q1"],
+    ],
+  );
+});
+
+test("an initial persistence failure is visible and prevents backend execution", async () => {
+  const s = scenario({ kind: "done" });
+  let backendRuns = 0;
+  globalThis.__praSaveFailureAt = 1;
+  globalThis.__praBackend = {
+    id: "codex",
+    async runTurn() {
+      backendRuns += 1;
+      return { exitCode: 0 };
+    },
+  };
+
+  await assert.rejects(
+    chatService.runTurn(
+      { backend: "codex" },
+      { workdir: "/work" },
+      s.conv,
+      "must remain local",
+      null,
+      s.ui,
+      {},
+      { lineId: "q1", thoughtId: "q1" },
+    ),
+    /simulated disk failure/,
+  );
+
+  assert.equal(backendRuns, 0);
+  assert.match(s.events.at(-1), /^error:保存失败（发送前）/);
+});
+
+test("an intermediate persistence failure is caught and reported through status", async () => {
+  const s = scenario({ kind: "done" });
+  // First save is required before sending; the thread_started save is second.
+  globalThis.__praSaveFailureAt = 2;
+  globalThis.__praBackend = {
+    id: "codex",
+    async runTurn(_opts, _workdir, _handle, _prompt, onEvent) {
+      onEvent({ kind: "thread_started", sessionId: "session-1" });
+      onEvent({ kind: "delta", text: "answer" });
+      onEvent({ kind: "done" });
+      return { exitCode: 0 };
+    },
+  };
+
+  await chatService.runTurn(
+    { backend: "codex" },
+    { workdir: "/work" },
+    s.conv,
+    "question",
+    null,
+    s.ui,
+    {},
+    { lineId: "q1", thoughtId: "q1" },
+  );
+  await Promise.resolve();
+
+  assert.ok(
+    s.statuses.some((status) => status.startsWith("保存失败（记录会话）")),
+  );
+  assert.equal(s.events.at(-1), "done");
+});
+
+test("a final persistence failure reports an error instead of false completion", async () => {
+  const s = scenario({ kind: "done" });
+  globalThis.__praSaveFailureAt = 2;
+
+  await assert.rejects(
+    chatService.runTurn(
+      { backend: "codex" },
+      { workdir: "/work", pageTextPages: s.pages },
+      s.conv,
+      "question",
+      null,
+      s.ui,
+      {},
+      { lineId: "q1", thoughtId: "q1" },
+    ),
+    /simulated disk failure/,
+  );
+
+  assert.match(s.events.at(-1), /^error:保存失败（完成回答）/);
+  assert.equal(s.events.includes("done"), false);
 });

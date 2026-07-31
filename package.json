@@ -1,11 +1,11 @@
 {
-  "name": "paper-reading-agent",
+  "name": "paper-reading-flow",
   "type": "module",
-  "version": "0.2.0",
-  "description": "Chat with the open paper — the agent is a local codex CLI scoped to that paper's PDF.",
+  "version": "0.9.0",
+  "description": "Branching, anchored PDF reading with persistent thought chains, re-entry checkpoints, and isolated AI context.",
   "config": {
-    "addonName": "Paper Reading Agent",
-    "addonID": "paper-reading-agent@xiaoxuan.li",
+    "addonName": "Paper Reading Flow",
+    "addonID": "paper-reading-flow@local",
     "addonRef": "paper-reading-agent",
     "addonInstance": "PaperReadingAgentAddon",
     "prefsPrefix": "extensions.paper-reading-agent"
