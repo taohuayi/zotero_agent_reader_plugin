@@ -3,7 +3,7 @@
 // in content/preferences.xhtml to the same full key. An empty string means "use
 // the backend's own default" (chatPanel.prefs() treats ""/undefined as unset).
 // Edit via Settings → Paper Reading Agent (or Advanced → Config Editor).
-pref("backend", "codex"); // codex | claude
+pref("backend", "chatgpt"); // codex | claude | chatgpt (default: ChatGPT via chat2api — no Codex quota)
 pref("codexPath", ""); // absolute path to the codex binary (else search PATH)
 pref("model", ""); // codex model (else codex config)
 pref("codexLastModel", ""); // last model actually reported by codex app-server
