@@ -86,7 +86,7 @@ function el(doc, tag, css, text) {
 var PRA_CSS = [
   // layout
   ".pra-wrap{display:flex;flex-direction:column;gap:13px;width:100%;max-width:100%;min-width:0;overflow-x:hidden;box-sizing:border-box;padding:13px 10px 18px;font:13.5px/1.78 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei UI',sans-serif;color:var(--fill-primary,#1d2129);background:linear-gradient(180deg,var(--color-control,#fff) 0,var(--fill-quinary,rgba(0,0,0,.018)) 100%);}",
-  ".pra-wrap.pra-wide{position:fixed!important;inset:14px!important;z-index:2147483000!important;width:auto!important;max-width:none!important;height:calc(100vh - 28px)!important;overflow-x:hidden!important;overflow-y:auto!important;padding:20px 28px 26px!important;border:1px solid var(--color-border,rgba(0,0,0,.16));border-radius:16px;background:var(--color-control,#fff)!important;box-shadow:0 16px 54px rgba(0,0,0,.28);}",
+  ".pra-wrap.pra-wide{position:fixed!important;top:14px!important;right:14px!important;bottom:14px!important;left:auto!important;width:min(58%,1000px)!important;max-width:none!important;height:auto!important;z-index:2147483000!important;overflow-x:hidden!important;overflow-y:auto!important;padding:20px 24px 26px!important;border:1px solid var(--color-border,rgba(0,0,0,.16));border-radius:16px;background:var(--color-control,#fff)!important;box-shadow:0 16px 54px rgba(0,0,0,.28);}",
   ".pra-wide .pra-messages{max-height:none!important;overflow-y:visible!important;}",
   ".pra-wide .pra-thought-list{max-height:430px!important;}",
   ".pra-wide .pra-composer{position:sticky;bottom:0;z-index:6;box-shadow:0 -8px 22px var(--color-control,#fff);}",
