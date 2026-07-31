@@ -1778,7 +1778,7 @@ function buildSkeleton(doc, body) {
   banner.className = "pra-banner";
   var topbar = el(doc, "div");
   topbar.className = "pra-topbar";
-  var ver = el(doc, "span", null, "v0.13.15"); // keep in sync with package.json
+  var ver = el(doc, "span", null, "v0.13.16"); // keep in sync with package.json
   ver.className = "pra-version";
   topbar.appendChild(ver);
   var popout = el(doc, "button", null, "宽屏阅读 ⛶");
@@ -2222,12 +2222,14 @@ async function mount(body, item) {
     ui.exportJSON.disabled = true;
     return;
   }
-  // debounce rapid clicks: each toggle re-lays-out the panel, so a double
-  // click used to bounce wide↔narrow and leave a random final state
+  // Wide-mode toggle. Bound to BOTH pointerup and click so it works even if
+  // one event type is swallowed by the Zotero item-pane environment; the
+  // 250ms guard eats the duplicate (pointerup fires first, click follows).
+  // Debug log lets us confirm the click actually arrives.
   var lastWideToggle = 0;
-  ui.popout.addEventListener("click", function () {
+  function toggleWideMode() {
     var now = Date.now();
-    if (now - lastWideToggle < 400) return;
+    if (now - lastWideToggle < 250) return;
     lastWideToggle = now;
     var wide = !ui.wrap.classList.contains("pra-wide");
     ui.wrap.classList.toggle("pra-wide", wide);
@@ -2236,10 +2238,17 @@ async function mount(body, item) {
       "title",
       wide ? "退出宽屏阅读" : "展开完整思维导图与对话笔记",
     );
+    try {
+      Zotero.debug(
+        "[PaperReadingAgent] wide toggle → " + (wide ? "wide" : "narrow"),
+      );
+    } catch (e) {}
     // NO full re-render here: the content is unchanged, the container size
     // is pure CSS, so re-rendering only caused lag that looked like missed
     // clicks (and users clicked again → wide↔narrow bouncing).
-  });
+  }
+  ui.popout.addEventListener("pointerup", toggleWideMode);
+  ui.popout.addEventListener("click", toggleWideMode);
   doc.addEventListener("keydown", function (event) {
     if (
       event.key === "Escape" &&
