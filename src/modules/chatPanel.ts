@@ -20,6 +20,7 @@ import { ensureLibrarySnapshot } from "./libraryContext";
 import * as PRAReading from "./readingWorkflow";
 import * as PRANotebook from "./conversationNotebook";
 import * as PRAComposerDraft from "./composerDraft";
+import { loadPdfTextIndexPages } from "./pdfTextIndex";
 
 var SECTION_ID = null;
 var PLUGIN_ID = null;
@@ -164,6 +165,11 @@ var PRA_CSS = [
   ".pra-map-node.dragging{opacity:.55;transform:scale(1.02);z-index:10;box-shadow:0 8px 22px rgba(0,0,0,.18);}",
   ".pra-map-node.drop-target{outline:2px dashed var(--accent-blue,#2563eb);outline-offset:2px;}",
   ".pra-map-node.renamed::after{content:'✏';position:absolute;right:4px;bottom:2px;font-size:8px;color:var(--fill-tertiary,#999);}",
+  ".pra-message-edit{border:none;background:transparent;color:var(--fill-tertiary,#888);font-size:10px;cursor:pointer;padding:2px 4px;opacity:0;transition:opacity .12s;}",
+  ".pra-row:hover .pra-message-edit{opacity:1;}.pra-message-edit:hover{color:var(--accent-blue,#2563eb);}",
+  ".pra-edit-area{width:100%;min-height:150px;box-sizing:border-box;border:1px solid var(--color-border,rgba(0,0,0,.22));border-radius:8px;padding:8px;font:12px/1.6 ui-monospace,Consolas,Menlo,monospace;background:var(--color-control,#fff);color:var(--fill-primary,#222);resize:vertical;}",
+  ".pra-edit-bar{display:flex;gap:6px;margin-top:6px;}",
+  ".pra-edit-note{font-size:10px;color:var(--fill-tertiary,#888);margin-top:4px;}",
   ".pra-breadcrumb{font-size:10.5px;color:var(--fill-secondary,#666);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
   ".pra-message-branch{align-self:center;opacity:0;border:none;background:transparent;color:var(--fill-tertiary,#888);font-size:10px;cursor:pointer;padding:2px 4px;transition:opacity .12s;}",
   ".pra-row:hover .pra-message-branch{opacity:1;}.pra-message-branch:hover{color:var(--accent-blue,#2563eb);}",
@@ -1207,6 +1213,16 @@ function renderMessage(doc, container, msg, attachmentID, onBranch, meta) {
     );
     row.appendChild(branch);
   }
+  // AI 回答可作为笔记编辑：原始输出自动备份到「原始全文」
+  if (msg.role === "assistant" && meta && meta.onEditMessage) {
+    var editBtn = el(doc, "button", null, "✏️ 编辑");
+    editBtn.className = "pra-message-edit";
+    editBtn.setAttribute("title", "像笔记一样改写这条回答（原始 AI 输出自动保存）");
+    editBtn.addEventListener("click", function () {
+      meta.onEditMessage(row, bubble, msg);
+    });
+    row.appendChild(editBtn);
+  }
   // branches that grew out of THIS message's text: clickable chips
   if (meta && meta.originThreads && meta.originThreads.length) {
     var originWrap = el(doc, "div");
@@ -1403,6 +1419,77 @@ function renderActiveMessages(session, options) {
             saveWorkflow(session);
             renderActiveMessages(session);
             renderWorkflow(session);
+          },
+          onEditMessage: function (rowEl, bubbleEl, message) {
+            if (isBusy(session)) return;
+            var editor = el(v.doc, "textarea");
+            editor.className = "pra-edit-area";
+            editor.value = String(message.content || "");
+            editor.spellcheck = false;
+            bubbleEl.textContent = "";
+            bubbleEl.appendChild(editor);
+            var bar = el(v.doc, "div");
+            bar.className = "pra-edit-bar";
+            var save = el(v.doc, "button", null, "保存");
+            save.className = "pra-mini";
+            var cancel = el(v.doc, "button", null, "取消");
+            cancel.className = "pra-mini";
+            bar.appendChild(save);
+            bar.appendChild(cancel);
+            bubbleEl.appendChild(bar);
+            var note = el(
+              v.doc,
+              "div",
+              null,
+              "编辑前的原始 AI 输出会自动保存在「原始全文」中；保存后重新校验引用页码。",
+            );
+            note.className = "pra-edit-note";
+            bubbleEl.appendChild(note);
+            editor.focus();
+            save.addEventListener("click", async function () {
+              var next = String(editor.value || "");
+              var orig = String(message.content || "");
+              if (next !== orig && !message.verbatimContent) {
+                message.verbatimContent = orig;
+              }
+              message.content = next;
+              // re-verify citations against the page index if available
+              try {
+                var pages = session.ctx && session.ctx.pageTextPages;
+                if (
+                  (!Array.isArray(pages) || !pages.length) &&
+                  session.ctx &&
+                  session.ctx.pageTextPath
+                ) {
+                  pages = await loadPdfTextIndexPages(session.ctx.pageTextPath);
+                  session.ctx.pageTextPages = pages;
+                }
+                if (Array.isArray(pages) && pages.length) {
+                  var result = PRAChatService.applyCitationVerification(message, {
+                    pageTextPages: pages,
+                  });
+                  if (!result) {
+                    delete message.citations;
+                    delete message.citationCounts;
+                  }
+                } else {
+                  delete message.citations;
+                  delete message.citationCounts;
+                }
+              } catch (e) {
+                try {
+                  Zotero.debug("[PaperReadingAgent] re-verify failed: " + e);
+                } catch (e2) {}
+                delete message.citations;
+                delete message.citationCounts;
+              }
+              saveWorkflow(session);
+              renderActiveMessages(session);
+              renderWorkflow(session);
+            });
+            cancel.addEventListener("click", function () {
+              renderActiveMessages(session);
+            });
           },
         },
       );
