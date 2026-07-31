@@ -29,13 +29,34 @@ function getPurify(win) {
   // The npm dompurify default export is callable as a factory: bind it to the
   // item-pane window so sanitization runs against that document. (A windowless
   // instance silently passes HTML through, which would defeat sanitization.)
-  _purify =
-    typeof D === "function"
-      ? D(win)
-      : typeof D.sanitize === "function"
-        ? D
-        : null;
+  try {
+    var instance =
+      typeof D === "function"
+        ? D(win)
+        : typeof D.sanitize === "function"
+          ? D
+          : null;
+    if (instance && typeof instance.sanitize === "function") {
+      _purify = instance;
+    }
+  } catch (e) {
+    _purify = null;
+  }
   return _purify;
+}
+
+// Degraded sanitizer: keeps markdown/KaTeX HTML, strips only the obviously
+// dangerous bits. Used when DOMPurify cannot bind to the item-pane document
+// (Zotero XUL/XHTML windows can fail DOMPurify's createHTMLDocument probe).
+function fallbackSanitize(html) {
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe\s*>/gi, "")
+    .replace(/<object[\s\S]*?<\/object\s*>/gi, "")
+    .replace(/<embed[\s\S]*?>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, "");
 }
 
 // Order matters: consume $$...$$ / \[...\] / \(...\) before inline $...$.
@@ -63,7 +84,7 @@ function tok(i) {
 } // survives marked + DOMPurify as plain text
 
 export function render(text, win, citationChecks) {
-  if (!marked || !katex || text == null) return null;
+  if (text == null) return null; // marked/katex may be absent → degrade, never block
 
   var src = String(text);
 
@@ -86,29 +107,39 @@ export function render(text, win, citationChecks) {
 
   var html;
   try {
-    html = marked.parse
+    html = marked && marked.parse
       ? marked.parse(src, { gfm: true, breaks: true })
-      : marked(src);
+      : esc(src).replace(/\n/g, "<br>");
   } catch (e) {
-    return null;
+    html = esc(src).replace(/\n/g, "<br>");
   }
 
   var pf = getPurify(win);
-  if (!pf) return null; // refuse to inject unsanitized HTML
   try {
-    html = pf.sanitize(html, { ADD_ATTR: ["target", "rel"] });
+    html = pf
+      ? pf.sanitize(html, { ADD_ATTR: ["target", "rel"] })
+      : fallbackSanitize(html);
   } catch (e) {
-    return null;
+    try {
+      html = fallbackSanitize(html);
+    } catch (e2) {
+      return null;
+    }
   }
 
   for (var j = 0; j < maths.length; j++) {
     var out;
     try {
-      out = katex.renderToString(maths[j].tex, {
-        displayMode: maths[j].display,
-        throwOnError: false,
-      });
+      out = katex
+        ? katex.renderToString(maths[j].tex, {
+            displayMode: maths[j].display,
+            throwOnError: false,
+          })
+        : null;
     } catch (e) {
+      out = null;
+    }
+    if (!out) {
       var d = maths[j].display ? "$$" : "$";
       out = esc(d + maths[j].tex + d);
     }
