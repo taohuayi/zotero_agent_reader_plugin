@@ -233,3 +233,84 @@ test("continuous mode asks for an authentic, contextual discovery process", () =
   assert.match(instruction, /Continue from this branch/);
   assert.doesNotMatch(instruction, /no more than 3 sentences/);
 });
+
+// ── manual editing / restructuring ──
+
+function treeConv() {
+  return {
+    messages: [],
+    reading: {
+      mode: "deep",
+      sequence: 6,
+      activeId: "root",
+      parkingLot: [],
+      threads: [
+        { id: "root", parentId: null, title: "root", rootQuestion: "root q" },
+        { id: "main", parentId: "root", title: "main", rootQuestion: "main q" },
+        { id: "a", parentId: "main", title: "A", rootQuestion: "a q" },
+        { id: "a1", parentId: "a", title: "A1", rootQuestion: "a1 q" },
+        { id: "b", parentId: "main", title: "B", rootQuestion: "b q" },
+      ],
+    },
+  };
+}
+
+test("updateThreadTitle rewrites the title but keeps rootQuestion verbatim", () => {
+  const conv = treeConv();
+  assert.equal(workflow.updateThreadTitle(conv, "a", "  新标题  "), true);
+  const t = workflow.ensure(conv).threads.find((x) => x.id === "a");
+  assert.equal(t.title, "新标题");
+  assert.equal(t.rootQuestion, "a q");
+  assert.equal(workflow.updateThreadTitle(conv, "a", "   "), false); // empty rejected
+  assert.equal(workflow.updateThreadTitle(conv, "nope", "x"), false); // unknown id
+});
+
+test("updateThreadSummary edits derived text only", () => {
+  const conv = treeConv();
+  assert.equal(workflow.updateThreadSummary(conv, "b", "新摘要"), true);
+  assert.equal(workflow.ensure(conv).threads.find((x) => x.id === "b").summary, "新摘要");
+});
+
+test("reparentThread moves a node, refuses cycles and unknown parents", () => {
+  const conv = treeConv();
+  assert.equal(workflow.reparentThread(conv, "a1", "b"), true);
+  assert.equal(workflow.ensure(conv).threads.find((x) => x.id === "a1").parentId, "b");
+  // cycle: moving main under its own descendant a1 would loop
+  assert.equal(workflow.reparentThread(conv, "main", "a1"), false);
+  assert.equal(workflow.reparentThread(conv, "main", "nope"), false);
+  // promote to root
+  assert.equal(workflow.reparentThread(conv, "main", null), true);
+  assert.equal(workflow.ensure(conv).threads.find((x) => x.id === "main").parentId, null);
+});
+
+test("isDescendant detects ancestor chains", () => {
+  const conv = treeConv();
+  assert.equal(workflow.isDescendant(conv, "root", "a1"), true);
+  assert.equal(workflow.isDescendant(conv, "a", "a1"), true);
+  assert.equal(workflow.isDescendant(conv, "a1", "a"), false);
+  assert.equal(workflow.isDescendant(conv, "a", "b"), false);
+});
+
+test("removeThread deletes the whole subtree, messages stay", () => {
+  const conv = treeConv();
+  conv.messages.push({ role: "user", content: "hi", thoughtId: "a" });
+  assert.equal(workflow.removeThread(conv, "a"), true);
+  const ids = workflow.ensure(conv).threads.map((x) => x.id);
+  assert.ok(!ids.includes("a"));
+  assert.ok(!ids.includes("a1"));
+  assert.ok(ids.includes("main"));
+  assert.ok(ids.includes("b"));
+  assert.equal(conv.messages.length, 1); // messages preserved
+  assert.equal(workflow.removeThread(conv, "nope"), false);
+});
+
+test("insertThread creates a fresh isolated thought under a parent", () => {
+  const conv = treeConv();
+  const created = workflow.insertThread(conv, " 新问题 ", "main");
+  assert.ok(created);
+  assert.equal(created.parentId, "main");
+  assert.equal(created.thoughtId, created.id); // new thought = isolated session
+  assert.equal(workflow.ensure(conv).activeId, created.id);
+  assert.equal(workflow.insertThread(conv, "   ", "main"), null); // blank rejected
+});
+

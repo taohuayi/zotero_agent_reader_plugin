@@ -151,6 +151,19 @@ var PRA_CSS = [
   ".pra-map-node.branch{border-left:3px solid var(--accent-orange,#d97706);}",
   ".pra-map-node.active{border-color:var(--accent-blue,#2563eb);background:var(--accent-blue10,rgba(64,114,229,.1));color:var(--accent-blue,#245fbd);font-weight:700;box-shadow:0 0 0 2px var(--accent-blue10,rgba(64,114,229,.13));}",
   ".pra-map-node-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}",
+  ".pra-origin-branches{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:7px;padding-top:6px;border-top:1px dashed var(--color-border,rgba(0,0,0,.12));font-size:10.5px;color:var(--fill-secondary,#666);}",
+  ".pra-origin-jump{border:1px solid var(--accent-orange30,rgba(217,119,6,.35));background:var(--accent-orange10,rgba(217,119,6,.08));color:var(--accent-orange,#b45309);border-radius:7px;padding:2px 7px;font:inherit;font-size:10.5px;cursor:pointer;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+  ".pra-origin-jump:hover{background:var(--accent-orange10,rgba(217,119,6,.18));}",
+  ".pra-origin-bar{display:flex;align-items:center;gap:6px;margin:2px 0 8px;padding:6px 9px;border-radius:8px;background:var(--accent-orange10,rgba(217,119,6,.07));border-left:3px solid var(--accent-orange,#d97706);font-size:11px;color:var(--fill-secondary,#555);}",
+  ".pra-origin-excerpt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+  ".pra-map-actions{display:none;position:absolute;top:-14px;right:4px;gap:3px;z-index:5;}",
+  ".pra-map-node:hover .pra-map-actions{display:flex;}",
+  ".pra-map-act{border:1px solid var(--color-border,rgba(0,0,0,.16));background:var(--color-control,#fff);border-radius:6px;padding:1px 5px;font:inherit;font-size:9.5px;cursor:pointer;color:var(--fill-secondary,#555);}",
+  ".pra-map-act:hover{color:var(--accent-blue,#2563eb);border-color:var(--accent-blue,#2563eb);}",
+  ".pra-map-act.danger:hover{color:#dc2626;border-color:#dc2626;}",
+  ".pra-map-node.dragging{opacity:.55;transform:scale(1.02);z-index:10;box-shadow:0 8px 22px rgba(0,0,0,.18);}",
+  ".pra-map-node.drop-target{outline:2px dashed var(--accent-blue,#2563eb);outline-offset:2px;}",
+  ".pra-map-node.renamed::after{content:'✏';position:absolute;right:4px;bottom:2px;font-size:8px;color:var(--fill-tertiary,#999);}",
   ".pra-breadcrumb{font-size:10.5px;color:var(--fill-secondary,#666);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
   ".pra-message-branch{align-self:center;opacity:0;border:none;background:transparent;color:var(--fill-tertiary,#888);font-size:10px;cursor:pointer;padding:2px 4px;transition:opacity .12s;}",
   ".pra-row:hover .pra-message-branch{opacity:1;}.pra-message-branch:hover{color:var(--accent-blue,#2563eb);}",
@@ -772,12 +785,13 @@ function renderWorkflow(session) {
     var children = layout.edges.filter(function (edge) {
       return edge.from === thread.id;
     }).length;
-    var node = el(doc, "button");
+    var node = el(doc, "div");
     node.className =
       "pra-map-node" +
       (position.column === 0 ? " root" : "") +
       (children > 1 ? " branch" : "") +
-      (thread.id === state.activeId ? " active" : "");
+      (thread.id === state.activeId ? " active" : "") +
+      (thread.title && thread.title !== thread.rootQuestion ? " renamed" : "");
     node.style.left = point.x + "px";
     node.style.top = point.y + "px";
     node.setAttribute("aria-level", String(position.column + 1));
@@ -786,21 +800,186 @@ function renderWorkflow(session) {
     node.appendChild(label);
     node.setAttribute(
       "title",
-      (thread.rootQuestion || thread.title) +
-        (thread.summary ? "\n\n上次停在：" + thread.summary : ""),
+      "原始问题：" +
+        (thread.rootQuestion || thread.title || "—") +
+        (thread.anchor && thread.anchor.page
+          ? "\n锚定：p." + thread.anchor.page
+          : "") +
+        (thread.summary ? "\n\n摘要：" + thread.summary : "") +
+        "\n\n拖拽可调整层级：拖到另一节点上=变为其子节点，拖到空白=回到主干。锚定原文的部分（引用/出处）不会随拖拽改变。",
     );
-    node.addEventListener("click", function () {
-      if (isBusy(session) || thread.id === state.activeId) return;
-      PRAReading.switchThread(session.conv, thread.id);
-      session.branchNext = false;
+
+    // ── node actions: insert / retitle / summary / delete ──
+    function promptText(title, initial) {
+      try {
+        var win = doc.defaultView;
+        if (!win || typeof win.prompt !== "function") return null;
+        return win.prompt(title, initial == null ? "" : String(initial));
+      } catch (e) {
+        return null;
+      }
+    }
+    function confirmAction(text) {
+      try {
+        var win = doc.defaultView;
+        if (!win || typeof win.confirm !== "function") return true;
+        return win.confirm(text);
+      } catch (e) {
+        return true;
+      }
+    }
+    var actions = el(doc, "div");
+    actions.className = "pra-map-actions";
+    function act(labelText, tip, handler, danger) {
+      var b = el(doc, "button", null, labelText);
+      b.className = "pra-map-act" + (danger ? " danger" : "");
+      b.setAttribute("title", tip);
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (isBusy(session)) return;
+        handler();
+      });
+      actions.appendChild(b);
+    }
+    act("➕", "在此节点下插入一个新问题节点", function () {
+      var q = promptText("新问题节点（挂在「" + (thread.title || thread.rootQuestion) + "」之下）", "");
+      if (q == null) return;
+      var created = PRAReading.insertThread(session.conv, q, thread.id);
+      if (!created) return;
       saveWorkflow(session);
       renderActiveMessages(session);
       renderWorkflow(session);
-      ui.input.placeholder = "继续这条思路…";
+      ui.input.placeholder = "向这个新问题提问…";
       ui.input.focus();
     });
+    act("✏️", "改写标题（原始问题仍保留在提示与导出中）", function () {
+      var v = promptText("改写节点标题（原始问题不变）", thread.title || thread.rootQuestion);
+      if (v == null) return;
+      if (PRAReading.updateThreadTitle(session.conv, thread.id, v)) {
+        saveWorkflow(session);
+        renderWorkflow(session);
+      }
+    });
+    act("📝", "改写摘要（锚定页码与引文不受影响）", function () {
+      var v = promptText("改写摘要", thread.summary || "");
+      if (v == null) return;
+      if (PRAReading.updateThreadSummary(session.conv, thread.id, v)) {
+        saveWorkflow(session);
+        renderWorkflow(session);
+      }
+    });
+    act("🗑", "删除此节点及其全部分支（消息仍保留在对话中）", function () {
+      var n = 1 + layout.edges.filter(function (edge) {
+        return edge.from === thread.id;
+      }).length;
+      if (!confirmAction("删除「" + (thread.title || thread.rootQuestion) + "」及其 " + n + " 个子分支？\n删除后消息仍保留在对话记录中，可重新组织。")) return;
+      PRAReading.removeThread(session.conv, thread.id);
+      saveWorkflow(session);
+      renderActiveMessages(session);
+      renderWorkflow(session);
+    });
+    node.appendChild(actions);
+
+    // ── drag to reparent: onto a node → its child; onto empty canvas → root ──
+    var draggingThreadId = thread.id;
+    var drag = null;
+    node.addEventListener("pointerdown", function (e) {
+      if (isBusy(session)) return;
+      if (e.button !== 0) return;
+      if (e.target.closest(".pra-map-act")) return;
+      drag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origLeft: point.x,
+        origTop: point.y,
+        moved: false,
+      };
+      var onMove = function (ev) {
+        if (!drag) return;
+        var dx = ev.clientX - drag.startX;
+        var dy = ev.clientY - drag.startY;
+        if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 5) {
+          drag.moved = true;
+          node.classList.add("dragging");
+        }
+        if (!drag.moved) return;
+        node.style.left = drag.origLeft + dx + "px";
+        node.style.top = drag.origTop + dy + "px";
+        // highlight the node we would drop onto
+        var target = dropTargetAt(ev.clientX, ev.clientY);
+        canvas.querySelectorAll(".pra-map-node.drop-target").forEach(function (n) {
+          n.classList.remove("drop-target");
+        });
+        if (target && target.dataset.threadId !== draggingThreadId) {
+          target.classList.add("drop-target");
+        }
+      };
+      var onUp = function (ev) {
+        if (typeof document.removeEventListener === "function") {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+        }
+        if (!drag) return;
+        var wasDrag = drag.moved;
+        drag = null;
+        node.classList.remove("dragging");
+        canvas.querySelectorAll(".pra-map-node.drop-target").forEach(function (n) {
+          n.classList.remove("drop-target");
+        });
+        if (wasDrag) {
+          var target = dropTargetAt(ev.clientX, ev.clientY);
+          var targetId = target ? target.dataset.threadId : null;
+          if (targetId && targetId !== thread.id) {
+            if (PRAReading.isDescendant(session.conv, thread.id, targetId)) return;
+            if (PRAReading.reparentThread(session.conv, thread.id, targetId)) {
+              saveWorkflow(session);
+              renderWorkflow(session);
+            }
+          } else if (!targetId && thread.parentId) {
+            // dropped on empty canvas → promote to a root node
+            if (PRAReading.reparentThread(session.conv, thread.id, null)) {
+              saveWorkflow(session);
+              renderWorkflow(session);
+            }
+          }
+          return;
+        }
+        // plain click: switch to this thread
+        if (thread.id === state.activeId) return;
+        PRAReading.switchThread(session.conv, thread.id);
+        session.branchNext = false;
+        saveWorkflow(session);
+        renderActiveMessages(session);
+        renderWorkflow(session);
+        ui.input.placeholder = "继续这条思路…";
+        ui.input.focus();
+      };
+      if (typeof document.addEventListener === "function") {
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+      }
+      e.preventDefault();
+    });
+    node.setAttribute("data-thread-id", thread.id);
     canvas.appendChild(node);
   });
+  function dropTargetAt(clientX, clientY) {
+    var els = canvas.querySelectorAll(".pra-map-node");
+    for (var i = 0; i < els.length; i++) {
+      var n = els[i];
+      if (n.classList.contains("dragging")) continue;
+      var r = n.getBoundingClientRect();
+      if (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      ) {
+        return n;
+      }
+    }
+    return null;
+  }
   ui.thoughtList.appendChild(canvas);
   var activePoint = positions[state.activeId];
   if (activePoint) {
@@ -1028,6 +1207,26 @@ function renderMessage(doc, container, msg, attachmentID, onBranch, meta) {
     );
     row.appendChild(branch);
   }
+  // branches that grew out of THIS message's text: clickable chips
+  if (meta && meta.originThreads && meta.originThreads.length) {
+    var originWrap = el(doc, "div");
+    originWrap.className = "pra-origin-branches";
+    originWrap.appendChild(el(doc, "span", null, "💡 由这段文字引出："));
+    meta.originThreads.forEach(function (t) {
+      var chip = el(doc, "button", null, t.title || t.id || "分支");
+      chip.className = "pra-origin-jump";
+      chip.setAttribute(
+        "title",
+        "跳转到从这个位置长出的分支" +
+          (t.originExcerpt ? "：" + t.originExcerpt : ""),
+      );
+      chip.addEventListener("click", function () {
+        if (meta.onJumpToBranch) meta.onJumpToBranch(t.id);
+      });
+      originWrap.appendChild(chip);
+    });
+    row.appendChild(originWrap);
+  }
   container.appendChild(row);
   return bubble;
 }
@@ -1104,6 +1303,59 @@ function renderActiveMessages(session, options) {
     if (hit && hit.messageIndex >= 0) hitIndices[hit.messageIndex] = true;
   });
 
+  // ── requirement: mark the exact passages that spawned later branches ──
+  // For every message, find the threads whose originExcerpt matches a run of
+  // that message's text. Those become clickable "由此引出" chips under the
+  // message, jumping back to the branch that grew out of that passage.
+  function normText(s) {
+    return String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  }
+  var originByMessage = new Map();
+  (session.conv.messages || []).forEach(function (message, index) {
+    if (!message || !message.content) return;
+    var base = normText(message.content);
+    if (!base) return;
+    state.threads.forEach(function (thread) {
+      if (!thread || !thread.originExcerpt) return;
+      var excerpt = normText(thread.originExcerpt);
+      if (!excerpt || base.indexOf(excerpt) < 0) return;
+      if (!originByMessage.has(index)) originByMessage.set(index, []);
+      originByMessage.get(index).push(thread);
+    });
+  });
+
+  // ── "源起" bar: the active branch shows where its question came from ──
+  var activeThreadForBar = PRAReading.activeThread(session.conv);
+  if (activeThreadForBar && activeThreadForBar.originExcerpt) {
+    var srcIndex = -1;
+    var srcExcerpt = normText(activeThreadForBar.originExcerpt);
+    (session.conv.messages || []).forEach(function (m, i) {
+      if (srcIndex >= 0 || !m || !m.content) return;
+      if (normText(m.content).indexOf(srcExcerpt) >= 0) srcIndex = i;
+    });
+    if (srcIndex >= 0) {
+      var bar = el(v.doc, "div");
+      bar.className = "pra-origin-bar";
+      bar.appendChild(el(v.doc, "span", null, "源起："));
+      var excerpt = el(v.doc, "span", null, activeThreadForBar.originExcerpt);
+      excerpt.className = "pra-origin-excerpt";
+      excerpt.setAttribute(
+        "title",
+        "触发这个问题的原文摘录（保留自提问时刻，不可编辑）",
+      );
+      bar.appendChild(excerpt);
+      var back = el(v.doc, "button", null, "回到原文 ↩");
+      back.className = "pra-anchor";
+      back.addEventListener("click", function () {
+        session.viewMode = "all";
+        notebookViewState(session.conv).viewMode = "all";
+        renderActiveMessages(session, { targetMessageIndex: srcIndex });
+      });
+      bar.appendChild(back);
+      v.ui.messages.appendChild(bar);
+    }
+  }
+
   var lastBubble = null;
   var lastContextLine = null;
   PRANotebook.messagesForView(session.conv, mode).forEach(function (message) {
@@ -1143,6 +1395,15 @@ function renderActiveMessages(session, options) {
             showContext && thread
               ? thread.title || thread.rootQuestion || lineId
               : null,
+          originThreads: originByMessage.get(messageIndex),
+          onJumpToBranch: function (threadId) {
+            if (isBusy(session)) return;
+            PRAReading.switchThread(session.conv, threadId);
+            session.branchNext = false;
+            saveWorkflow(session);
+            renderActiveMessages(session);
+            renderWorkflow(session);
+          },
         },
       );
     } catch (e) {

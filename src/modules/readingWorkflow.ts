@@ -467,3 +467,143 @@ export function responseInstruction(mode, isFollowup) {
       : " This begins a new branch; use the supplied ancestry only as orientation.")
   );
 }
+
+// ── manual editing / restructuring (user-driven; anchored fields untouched) ──
+
+function cleanTitle(value) {
+  var v = String(value == null ? "" : value)
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!v) return "";
+  return v.length > MAX_TITLE
+    ? v.slice(0, MAX_TITLE - 1).trimEnd() + "…"
+    : v;
+}
+
+// Edit a node's display title. rootQuestion (the original question) is
+// preserved verbatim — it is the immutable record of what was asked.
+export function updateThreadTitle(conv, id, title) {
+  var state = ensure(conv);
+  var t = state.threads.find(function (x) {
+    return x && x.id === id;
+  });
+  if (!t) return false;
+  var v = cleanTitle(title);
+  if (!v) return false;
+  t.title = v;
+  t.updatedAt = nowISO();
+  return true;
+}
+
+// Edit the checkpoint summary shown on the node. The summary is derived
+// text; the anchor (page + verbatim quote) is never touched.
+export function updateThreadSummary(conv, id, summary) {
+  var state = ensure(conv);
+  var t = state.threads.find(function (x) {
+    return x && x.id === id;
+  });
+  if (!t) return false;
+  t.summary = String(summary == null ? "" : summary).trim();
+  t.updatedAt = nowISO();
+  return true;
+}
+
+// Is `ancestorId` an ancestor-or-self of `maybeId`? Blocks cycles on reparent.
+export function isDescendant(conv, ancestorId, maybeId) {
+  var state = ensure(conv);
+  var byId = Object.create(null);
+  state.threads.forEach(function (t) {
+    byId[t.id] = t;
+  });
+  var cur = byId[maybeId];
+  var seen = new Set();
+  while (cur && !seen.has(cur.id)) {
+    if (cur.id === ancestorId) return true;
+    seen.add(cur.id);
+    cur = cur.parentId ? byId[cur.parentId] : null;
+  }
+  return false;
+}
+
+// Move a node under a new parent (null = root). Refuses cycles and unknown
+// parents. Anchors / originExcerpt ride along unchanged.
+export function reparentThread(conv, id, newParentId) {
+  var state = ensure(conv);
+  var t = state.threads.find(function (x) {
+    return x && x.id === id;
+  });
+  if (!t) return false;
+  if (newParentId && newParentId !== id) {
+    if (isDescendant(conv, id, newParentId)) return false; // cycle
+    if (
+      !state.threads.some(function (x) {
+        return x && x.id === newParentId;
+      })
+    )
+      return false; // unknown parent
+  }
+  t.parentId = newParentId || null;
+  t.updatedAt = nowISO();
+  return true;
+}
+
+// Delete a node AND its whole descendant subtree. Messages stay in the
+// conversation (they resurface under "未归入思维节点" on export); parked
+// questions that pointed at the removed nodes are dropped.
+export function removeThread(conv, id) {
+  var state = ensure(conv);
+  if (
+    !state.threads.some(function (x) {
+      return x && x.id === id;
+    })
+  )
+    return false;
+  var toRemove = new Set([id]);
+  var stack = [id];
+  while (stack.length) {
+    var cur = stack.pop();
+    state.threads.forEach(function (t) {
+      if (t && t.parentId === cur && !toRemove.has(t.id)) {
+        toRemove.add(t.id);
+        stack.push(t.id);
+      }
+    });
+  }
+  state.threads = state.threads.filter(function (t) {
+    return !toRemove.has(t.id);
+  });
+  if (state.activeId && toRemove.has(state.activeId)) {
+    state.activeId = state.threads.length ? state.threads[0].id : null;
+  }
+  if (Array.isArray(state.parkingLot)) {
+    state.parkingLot = state.parkingLot.filter(function (p) {
+      return !(p && p.parentId && toRemove.has(p.parentId));
+    });
+  }
+  return true;
+}
+
+// Manually insert a brand-new question node under `parentId` (null = root).
+// Creates a fresh isolated thought (new thoughtId) — it starts its own AI
+// session when first asked, exactly like a "从这里分叉" card.
+export function insertThread(conv, question, parentId) {
+  var state = ensure(conv);
+  var text = String(question == null ? "" : question).trim();
+  if (!text) return null;
+  var thread = makeThread(state, text, {
+    parentId: parentId || null,
+    newThought: true,
+  });
+  if (parentId) {
+    var parent = state.threads.find(function (x) {
+      return x && x.id === parentId;
+    });
+    if (parent) {
+      parent.status = "paused";
+      parent.updatedAt = thread.createdAt;
+    }
+  }
+  state.threads.push(thread);
+  state.activeId = thread.id;
+  return thread;
+}
