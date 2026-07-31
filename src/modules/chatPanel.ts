@@ -357,6 +357,25 @@ async function navigateToReference(attachmentID, page, quote) {
 
 // Render assistant text as Markdown+math HTML; fall back to plain text on any
 // failure (never inject unsanitized HTML into the privileged node).
+// Scale down any math that overflows its container so it always fits the
+// panel width (Firefox supports the zoom property, which also reflows —
+// unlike transform, it leaves no blank space below).
+function fitMath(root) {
+  if (!root) return;
+  var items = root.querySelectorAll(".katex-display .katex, .katex-display");
+  for (var i = 0; i < items.length; i++) {
+    var el = items[i];
+    var parent = el.parentElement;
+    if (!parent || !parent.isConnected) continue;
+    if (el.scrollWidth > parent.clientWidth + 4 && el.scrollWidth > 40) {
+      var scale = Math.max(0.35, parent.clientWidth / el.scrollWidth);
+      el.style.zoom = scale.toFixed(3);
+    } else if (el.style.zoom) {
+      el.style.zoom = ""; // container widened (wide mode) — restore full size
+    }
+  }
+}
+
 function setRich(bubble, text, attachmentID, citations) {
   var html = null;
   try {
@@ -1520,6 +1539,7 @@ function renderActiveMessages(session, options) {
         },
       );
       hasRenderedMessage = true;
+      fitMath(v.ui.messages);
     } catch (e) {
       try {
         Zotero.debug("[PaperReadingAgent] renderMessage failed: " + e);
@@ -2002,6 +2022,7 @@ function renderAssistant(session) {
         v.attachmentID,
         r.message && r.message.citations,
       );
+      fitMath(v.assistantBubble);
     });
   }
 }
