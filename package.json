@@ -1,7 +1,7 @@
 {
   "name": "paper-reading-flow",
   "type": "module",
-  "version": "0.13.16",
+  "version": "0.13.17",
   "description": "Branching, anchored PDF reading with persistent thought chains, re-entry checkpoints, and isolated AI context.",
   "config": {
     "addonName": "Paper Reading Flow",

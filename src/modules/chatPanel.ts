@@ -86,7 +86,7 @@ function el(doc, tag, css, text) {
 var PRA_CSS = [
   // layout
   ".pra-wrap{display:flex;flex-direction:column;gap:13px;width:100%;max-width:100%;min-width:0;overflow-x:hidden;box-sizing:border-box;padding:13px 10px 18px;font:13.5px/1.78 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei UI',sans-serif;color:var(--fill-primary,#1d2129);background:linear-gradient(180deg,var(--color-control,#fff) 0,var(--fill-quinary,rgba(0,0,0,.018)) 100%);}",
-  ".pra-wrap.pra-wide{position:fixed!important;top:14px!important;right:14px!important;bottom:14px!important;left:auto!important;width:min(58%,1000px)!important;max-width:none!important;height:auto!important;z-index:2147483000!important;overflow-x:hidden!important;overflow-y:auto!important;padding:20px 24px 26px!important;border:1px solid var(--color-border,rgba(0,0,0,.16));border-radius:16px;background:var(--color-control,#fff)!important;box-shadow:0 16px 54px rgba(0,0,0,.28);}",
+  ".pra-wrap.pra-wide{position:fixed!important;top:52px!important;right:16px!important;bottom:16px!important;left:auto!important;width:min(58%,1000px)!important;max-width:none!important;height:auto!important;z-index:2147483000!important;overflow-x:hidden!important;overflow-y:auto!important;padding:20px 24px 26px!important;border:1px solid var(--color-border,rgba(0,0,0,.16));border-radius:16px;background:var(--color-control,#fff)!important;box-shadow:0 16px 54px rgba(0,0,0,.28);}",
   ".pra-wide .pra-messages{max-height:none!important;overflow-y:visible!important;}",
   ".pra-wide .pra-thought-list{max-height:430px!important;}",
   ".pra-wide .pra-composer{position:sticky;bottom:0;z-index:6;box-shadow:0 -8px 22px var(--color-control,#fff);}",
@@ -1778,13 +1778,13 @@ function buildSkeleton(doc, body) {
   banner.className = "pra-banner";
   var topbar = el(doc, "div");
   topbar.className = "pra-topbar";
-  var ver = el(doc, "span", null, "v0.13.16"); // keep in sync with package.json
-  ver.className = "pra-version";
-  topbar.appendChild(ver);
   var popout = el(doc, "button", null, "宽屏阅读 ⛶");
   popout.className = "pra-popout";
   popout.setAttribute("title", "在 Zotero 内展开完整思维导图与对话笔记");
   topbar.append(popout, banner);
+  var ver = el(doc, "span", null, "v0.13.17"); // keep in sync with package.json
+  ver.className = "pra-version";
+  topbar.appendChild(ver);
   var notebookTools = el(doc, "div");
   notebookTools.className = "pra-notebook-tools";
   var search = el(doc, "input");
